@@ -1,14 +1,84 @@
-# n8n to LangGraph Workflow Converter
+# CatLang - n8n to LangGraph Converter with MCP Server
 
-A systematic framework for converting n8n workflows to LangGraph implementations using a three-phase orchestration process. This repository provides structured prompts and implementation guides to transform n8n automation workflows into production-ready LangGraph applications.
+A comprehensive framework for converting n8n workflows to LangGraph implementations. Available as both an **MCP (Model Context Protocol) Server** for integration with Claude Desktop and other MCP clients, and as a standalone workflow conversion tool.
 
 ## Overview
 
-This framework enables developers to systematically convert n8n workflows into LangGraph implementations by following a well-defined orchestration process. The conversion process analyzes n8n workflow specifications, extracts custom logic, and generates LangGraph code following best practices.
+CatLang provides two ways to convert n8n workflows to LangGraph:
 
-## Conversion Workflow
+1. **MCP Server (Recommended)**: Integrate with Claude Desktop or any MCP-compatible client for interactive workflow conversion
+2. **Standalone Tool**: Use the three-phase orchestration process directly via Python
 
-The conversion process follows a three-phase orchestration approach:
+The conversion process analyzes n8n workflow specifications, extracts custom logic, and generates production-ready LangGraph code following best practices.
+
+## Quick Start
+
+### As MCP Server (Recommended)
+
+The MCP server provides interactive tools for workflow conversion through Claude Desktop or other MCP clients.
+
+**Prerequisites:**
+- Python 3.10+
+- Claude Desktop (or another MCP client)
+- OpenAI API key (or other LLM provider)
+
+**Installation:**
+
+1. Clone the repository:
+```bash
+git clone <repository-url>
+cd catlang
+```
+
+2. Install dependencies:
+```bash
+pip install -r requirements.txt
+```
+
+3. Configure environment variables:
+```bash
+cp env_template.txt .env
+# Edit .env and add your OPENAI_API_KEY
+```
+
+4. Configure Claude Desktop (see [Claude Desktop Setup Guide](docs/CLAUDE_DESKTOP_SETUP.md))
+
+5. Start using the tools in Claude Desktop!
+
+For detailed setup instructions, see the [MCP Server Setup Guide](docs/MCP_SERVER_SETUP.md).
+
+### As Standalone Workflow Converter
+
+Use the three-phase orchestration process directly:
+
+## MCP Server Usage
+
+The MCP server exposes the following tools:
+
+### Available Tools
+
+1. **`analyze_n8n_workflow`** - Analyzes n8n workflow JSON and generates production requirements
+2. **`extract_custom_logic`** - Extracts custom logic from code nodes (Python/JavaScript)
+3. **`generate_langgraph_implementation`** - Generates LangGraph code from requirements
+4. **`validate_implementation`** - Validates generated LangGraph code for syntax, compliance, and best practices
+5. **`list_guides`** - Lists available implementation guides
+6. **`query_guide`** - Retrieves specific implementation guide content
+
+### Resources
+
+The server also provides access to implementation guides as MCP resources:
+
+- **URI Scheme**: `guide://docs/{category}/{name}`
+- **Categories**: `implementation`, `paradigm`, `setup`, `testing`, `integration`, `structure`, `requirements`, `general`
+- Access guides via MCP resource protocol or use the `list_guides` and `query_guide` tools
+
+For detailed usage examples, see [Usage Examples](docs/USAGE_EXAMPLES.md).
+
+---
+
+## Standalone Workflow Conversion
+
+The standalone conversion process follows a three-phase orchestration approach:
 
 ### Phase 1: Production Requirements Analysis
 **Prompt:** `OrchestrationPrompts/Step1-ProductionRequirements.md`
@@ -52,20 +122,19 @@ Converts the workflow specification into a LangGraph implementation:
 **Input**: Production requirements + custom logic specifications  
 **Output**: Complete LangGraph implementation
 
-## Getting Started
-
 ### Prerequisites
 
-- Python 3.9 or higher
+- Python 3.10 or higher
 - n8n workflow JSON export
 - Understanding of LangGraph concepts (Functional API and Graph API)
+- LLM provider API key (OpenAI recommended for MVP)
 
 ### Installation
 
 1. Clone the repository:
 ```bash
 git clone <repository-url>
-cd validationrun
+cd catlang
 ```
 
 2. Install dependencies:
@@ -73,10 +142,11 @@ cd validationrun
 pip install -r requirements.txt
 ```
 
-3. Review the orchestration prompts:
-   - `OrchestrationPrompts/Step1-ProductionRequirements.md` - For workflow analysis
-   - `OrchestrationPrompts/Step2-CustomLogic.md` - For custom node analysis
-   - `OrchestrationPrompts/Step3-MainOrchestorPrompt.md` - For LangGraph implementation
+3. Configure environment variables:
+```bash
+cp env_template.txt .env
+# Edit .env and add your API keys
+```
 
 4. Review implementation guides in `guides/`:
    - `paradigm-selection.md` - Choosing between Functional API and Graph API
@@ -150,12 +220,16 @@ For detailed setup instructions, see the example workflow's documentation in `sr
 ## Project Structure
 
 ```
-validationrun/
-├── OrchestrationPrompts/          # Three-phase conversion prompts
-│   ├── Step1-ProductionRequirements.md
-│   ├── Step2-CustomLogic.md
-│   └── Step3-MainOrchestorPrompt.md
-├── guides/                        # Implementation guides
+catlang/
+├── config/                        # Configuration files
+│   ├── server.yaml                # MCP server configuration
+│   └── providers.yaml            # LLM provider configuration
+├── docs/                          # Documentation
+│   ├── MCP_SERVER_SETUP.md       # MCP server setup guide
+│   ├── CLAUDE_DESKTOP_SETUP.md   # Claude Desktop integration guide
+│   ├── USAGE_EXAMPLES.md         # Usage examples
+│   └── TESTING.md                 # Testing documentation
+├── guides/                        # Implementation guides (MCP resources)
 │   ├── api-integration.md
 │   ├── authentication-setup.md
 │   ├── functional-api-implementation.md
@@ -164,9 +238,21 @@ validationrun/
 │   ├── paradigm-selection.md
 │   ├── project-structure.md
 │   └── testing-and-troubleshooting.md
-├── src/                           # Generated LangGraph implementations
-│   └── workflow.py                # Example: Sales email campaign
+├── src/                           # Source code
+│   ├── mcp_server/                # MCP server implementation
+│   │   ├── server.py              # Main server
+│   │   ├── tools/                 # Tool implementations
+│   │   └── resources/            # Resource handlers
+│   ├── llm_provider/              # LLM provider abstraction
+│   ├── workflow_engine/           # Workflow engine (future)
+│   └── workflow.py               # Example: Sales email campaign
+├── tests/                         # Test suite
+│   ├── test_fase10_mcp_integration.py
+│   └── ...                       # Other test files
+├── scripts/                       # Utility scripts
+│   └── verify_setup.py           # Setup verification
 ├── requirements.txt               # Python dependencies
+├── run_mcp_server.py             # MCP server entry point
 ├── env_template.txt               # Environment variables template
 ├── LICENSE                        # MIT License
 └── README.md                      # This file
@@ -225,11 +311,19 @@ For more detailed troubleshooting, see `guides/testing-and-troubleshooting.md`.
 - Use minimal OAuth scopes required
 - Review security best practices in implementation guides
 
-## Documentation References
+## Documentation
+
+- [MCP Server Setup Guide](docs/MCP_SERVER_SETUP.md) - Complete setup instructions for MCP server
+- [Claude Desktop Integration](docs/CLAUDE_DESKTOP_SETUP.md) - Configure Claude Desktop to use CatLang
+- [Usage Examples](docs/USAGE_EXAMPLES.md) - Examples of using all tools
+- [Testing Guide](docs/TESTING.md) - Running tests and test coverage
+
+## External Documentation References
 
 - [LangGraph Functional API Overview](https://blog.langchain.com/introducing-the-langgraph-functional-api/)
 - [LangGraph Functional API Concepts](https://github.com/langchain-ai/langgraph/blob/main/docs/docs/concepts/functional_api.md)
 - [LangGraph Documentation](https://langchain-ai.github.io/langgraph/)
+- [MCP Protocol Specification](https://modelcontextprotocol.io/)
 - [n8n Documentation](https://docs.n8n.io/)
 
 ## Contributing
