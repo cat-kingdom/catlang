@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "catlang": {
+      "command": "python",
+      "args": [
+        "/home/muhfajarags/project/catlang/run_mcp_server.py"
+      ],
+      "env": {
+        "PYTHONPATH": "/home/muhfajarags/project/catlang",
+        "LLM_PROVIDER": "openrouter",
+        "OPENROUTER_API_KEY": "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",
+        "OPENROUTER_MODEL": "openai/gpt-4o-mini"
+      }
+    }
+  }
+}

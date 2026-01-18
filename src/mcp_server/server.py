@@ -11,7 +11,6 @@ from pathlib import Path
 from typing import Any, Optional
 
 from mcp.server.fastmcp import FastMCP
-from mcp.server.stdio import stdio_server
 
 from ..llm_provider import create_from_env
 from .resources.guides import GuideResourceManager
@@ -186,11 +185,19 @@ class MCPServer:
             
             schema = TOOL_SCHEMAS[tool_name]
             
-            # Register with FastMCP using programmatic registration
-            # FastMCP.tool() must be called as a decorator: mcp.tool(name="...", description="...")(handler)
-            # First call returns a decorator, second call applies it to the handler
-            decorator = self.mcp.tool(name=tool_name, description=schema.get("description", ""))
-            decorator(handler)
+            # Register with FastMCP using tool decorator
+            # FastMCP automatically generates schema from function signature
+            try:
+                # Apply decorator to handler function
+                decorated_handler = self.mcp.tool(
+                    name=tool_name,
+                    description=schema.get("description", "")
+                )(handler)
+                logger.debug(f"Registered tool with FastMCP: {tool_name}")
+            except Exception as e:
+                logger.error(f"Failed to register {tool_name} with FastMCP: {e}")
+                # Continue anyway - tool is still registered in our registry
+                continue
             
             # Register with our internal registry for management
             self.tool_registry.register(
@@ -202,7 +209,7 @@ class MCPServer:
                 enabled=True,
             )
             
-            logger.debug(f"Registered tool: {tool_name}")
+            logger.debug(f"Registered tool in registry: {tool_name}")
         
         logger.info(
             f"✓ Registered {self.tool_registry.count_enabled()} tools "
@@ -260,17 +267,13 @@ class MCPServer:
             )
         
         try:
-            # Open stdio transport
-            async with stdio_server() as (read_stream, write_stream):
-                logger.info("✓ stdio transport initialized")
-                logger.info("Server ready. Waiting for requests...")
-                
-                # Run the MCP server
-                # FastMCP.run() accepts read_stream and write_stream directly
-                await self.mcp.run(
-                    read_stream=read_stream,
-                    write_stream=write_stream,
-                )
+            # FastMCP.run_stdio_async() is the async version for stdio transport
+            # Use this when already in an async context
+            logger.info("✓ stdio transport initialized")
+            logger.info("Server ready. Waiting for requests...")
+            
+            # Use run_stdio_async() for async context (non-blocking)
+            await self.mcp.run_stdio_async()
         except KeyboardInterrupt:
             logger.info("Received interrupt signal. Shutting down...")
         except Exception as e:
