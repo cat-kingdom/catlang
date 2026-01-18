@@ -269,6 +269,16 @@ def parse_javascript_code(code: str) -> Dict[str, Any]:
             "position": match.start(),
         })
     
+    # Extract function expressions: const name = function() {}
+    func_expr_pattern = r"(?:const|let|var)\s+(\w+)\s*=\s*function\s*\([^)]*\)\s*\{"
+    func_expr_matches = re.finditer(func_expr_pattern, code)
+    for match in func_expr_matches:
+        functions.append({
+            "name": match.group(1),
+            "type": "expression",
+            "position": match.start(),
+        })
+    
     logger.debug(
         f"Parsed JavaScript code: {len(imports)} imports, "
         f"{len(functions)} functions, {len(dependencies)} dependencies"

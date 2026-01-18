@@ -388,6 +388,19 @@ class TestToolHandlers:
     @pytest.mark.asyncio
     async def test_extract_custom_logic_handler(self):
         """Test extract_custom_logic handler."""
+        # Mock LLM provider for this test
+        from unittest.mock import Mock
+        mock_provider = Mock()
+        mock_provider.is_initialized.return_value = True
+        mock_response = Mock()
+        mock_response.content = "Generated specifications"
+        mock_provider.generate.return_value = mock_response
+        
+        from src.mcp_server.tools.handlers import set_server_instance
+        mock_server = Mock()
+        mock_server._get_llm_provider.return_value = mock_provider
+        set_server_instance(mock_server)
+        
         result = await extract_custom_logic(
             code="def test(): pass",
             language="python",
@@ -395,7 +408,10 @@ class TestToolHandlers:
         )
         assert isinstance(result, dict)
         assert "status" in result
-        assert result["language"] == "python"
+        assert result["status"] == "success"
+        assert "specifications" in result
+        assert "metadata" in result
+        assert result["metadata"]["language"] == "python"
 
     @pytest.mark.asyncio
     async def test_generate_langgraph_implementation_handler(self):
