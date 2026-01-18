@@ -361,13 +361,29 @@ class TestToolHandlers:
     @pytest.mark.asyncio
     async def test_analyze_n8n_workflow_handler(self):
         """Test analyze_n8n_workflow handler."""
+        # Mock server instance with provider
+        from unittest.mock import Mock, patch
+        from src.mcp_server.tools.handlers import set_server_instance
+        from src.llm_provider.base import GenerationResponse
+        
+        mock_server = Mock()
+        mock_provider = Mock()
+        mock_provider.is_initialized.return_value = True
+        mock_provider.generate.return_value = GenerationResponse(
+            content="Test requirements",
+            model="gpt-4o-mini",
+        )
+        mock_server._get_llm_provider.return_value = mock_provider
+        set_server_instance(mock_server)
+        
         result = await analyze_n8n_workflow(
             workflow_json='{"nodes": [], "connections": {}}',
             include_metadata=True,
         )
         assert isinstance(result, dict)
         assert "status" in result
-        assert result["status"] == "not_implemented"
+        # Handler is now implemented, should return success or error (not not_implemented)
+        assert result["status"] in ["success", "error"]
 
     @pytest.mark.asyncio
     async def test_extract_custom_logic_handler(self):

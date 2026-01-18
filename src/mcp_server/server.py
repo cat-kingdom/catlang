@@ -23,6 +23,7 @@ from .tools.handlers import (
     validate_implementation,
     list_guides,
     query_guide,
+    set_server_instance,
 )
 
 logger = logging.getLogger(__name__)
@@ -155,6 +156,9 @@ class MCPServer:
         """
         logger.info("Registering server capabilities...")
         
+        # Set server instance for handler context (allows handlers to access LLM provider)
+        set_server_instance(self)
+        
         # Map of tool names to handler functions
         tool_handlers = {
             "analyze_n8n_workflow": analyze_n8n_workflow,
@@ -210,11 +214,11 @@ class MCPServer:
         # Register capabilities
         self._register_capabilities()
         
-        # Only support stdio transport for now (Fase 3)
+        # Only support stdio transport for now (other transports in post-MVP)
         if self.transport_type != "stdio":
             raise ValueError(
                 f"Transport type '{self.transport_type}' not supported yet. "
-                "Only 'stdio' is supported in Fase 3."
+                "Only 'stdio' is currently supported."
             )
         
         try:
