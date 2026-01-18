@@ -1,0 +1,20 @@
+# MCP Server Configuration
+server:
+  name: "catlang"
+  version: "0.1.0"
+  description: "n8n to LangGraph Conversion Tool"
+
+transport:
+  type: "stdio"  # Options: stdio, sse, websocket
+  # stdio: Standard input/output (for Claude Desktop)
+  # sse: Server-Sent Events (for web clients)
+  # websocket: WebSocket (for real-time clients)
+
+logging:
+  level: "INFO"  # Options: DEBUG, INFO, WARNING, ERROR
+  format: "json"  # Options: json, text
+  file: null  # Optional: path to log file
+
+workspace:
+  path: "."  # Workspace root path
+  guides_path: "guides"  # Path to guides directory
