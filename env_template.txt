@@ -5,10 +5,20 @@
 # NEVER commit the .env file to version control
 
 # ----------------------------------------------------------------------------
+# LLM Provider Configuration
+# ----------------------------------------------------------------------------
+# Select which LLM provider to use (openai, anthropic, google, etc.)
+# Default: openai (if not set)
+LLM_PROVIDER=openai
+
+# ----------------------------------------------------------------------------
 # OpenAI Configuration
 # ----------------------------------------------------------------------------
 # Get your API key from: https://platform.openai.com/api-keys
 OPENAI_API_KEY=sk-your-openai-api-key-here
+
+# Optional: Override default model (default: gpt-4o-mini)
+# OPENAI_MODEL=gpt-4o-mini
 
 # ----------------------------------------------------------------------------
 # Hunter.io Configuration

@@ -28,7 +28,9 @@ from dotenv import load_dotenv
 # LangGraph and LangChain
 from langgraph.func import entrypoint, task
 from langgraph.checkpoint.memory import MemorySaver
-from langchain_openai import ChatOpenAI
+
+# LLM Provider abstraction
+from llm_provider import create_from_env
 
 # Google API
 from google.auth.transport.requests import Request
@@ -202,14 +204,24 @@ sheets_service = build('sheets', 'v4', credentials=google_creds)
 gmail_service = build('gmail', 'v1', credentials=google_creds)
 logger.info("✓ Google API clients initialized")
 
-# Initialize OpenAI client
-logger.info("Initializing OpenAI client...")
-llm = ChatOpenAI(
-    model=DEFAULT_MODEL,
-    temperature=0.7,
-    api_key=os.getenv('OPENAI_API_KEY')
-)
-logger.info(f"✓ OpenAI client initialized (model: {DEFAULT_MODEL})")
+# Initialize LLM provider (using abstraction layer)
+logger.info("Initializing LLM provider...")
+try:
+    llm_provider = create_from_env(auto_initialize=True)
+    # Get LangChain client for backward compatibility with LangGraph
+    llm = llm_provider.get_langchain_client()
+    logger.info(f"✓ LLM provider initialized (provider: {llm_provider.provider_type}, model: {llm_provider.default_model})")
+except Exception as e:
+    logger.error(f"Failed to initialize LLM provider: {e}")
+    logger.error("Falling back to direct OpenAI initialization for backward compatibility...")
+    # Fallback to direct initialization for backward compatibility
+    from langchain_openai import ChatOpenAI
+    llm = ChatOpenAI(
+        model=DEFAULT_MODEL,
+        temperature=0.7,
+        api_key=os.getenv('OPENAI_API_KEY')
+    )
+    logger.info(f"✓ OpenAI client initialized (model: {DEFAULT_MODEL}) - using fallback")
 
 # Hunter.io API key
 HUNTER_API_KEY = os.getenv('HUNTER_API_KEY')
