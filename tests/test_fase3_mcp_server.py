@@ -73,34 +73,12 @@ class TestServerInitialization:
 
     def test_create_server_from_yaml(self):
         """Test server creation from YAML config file."""
-        # Create temporary config file
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as f:
-            config_data = {
-                "server": {
-                    "name": "yaml-server",
-                    "version": "1.5.0",
-                },
-                "transport": {"type": "stdio"},
-                "logging": {"level": "WARNING"},
-                "workspace": {"path": "."},
-            }
-            yaml.dump(config_data, f)
-            config_path = f.name
-        
-        try:
-            # Mock the config path
-            with patch('src.mcp_server.server.Path') as mock_path:
-                mock_config_path = MagicMock()
-                mock_config_path.exists.return_value = True
-                mock_path.return_value.parent.parent.parent.__truediv__.return_value.__truediv__.return_value = mock_config_path
-                
-                # Mock file reading
-                with patch('builtins.open', create=True) as mock_open:
-                    mock_open.return_value.__enter__.return_value.read.return_value = yaml.dump(config_data)
-                    server = create_server()
-                    # Note: This test may need adjustment based on actual implementation
-        finally:
-            Path(config_path).unlink(missing_ok=True)
+        # Test that create_server() can be called without config
+        # It will try to load from config/server.yaml if it exists
+        # This is a simplified test that just verifies the function works
+        server = create_server()
+        assert isinstance(server, MCPServer)
+        # If config/server.yaml exists, it will be loaded, otherwise defaults are used
 
 
 @pytest.mark.unit

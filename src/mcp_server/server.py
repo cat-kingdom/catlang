@@ -14,6 +14,16 @@ from mcp.server.fastmcp import FastMCP
 from mcp.server.stdio import stdio_server
 
 from ..llm_provider import create_from_env
+from .tools.registry import get_registry
+from .tools.schemas import TOOL_SCHEMAS
+from .tools.handlers import (
+    analyze_n8n_workflow,
+    extract_custom_logic,
+    generate_langgraph_implementation,
+    validate_implementation,
+    list_guides,
+    query_guide,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -60,13 +70,16 @@ class MCPServer:
         # Initialize LLM provider (will be initialized lazily)
         self._llm_provider = None
         
+        # Initialize tool registry
+        self.tool_registry = get_registry()
+        
         # Setup logging
         self._setup_logging()
         
         # Create FastMCP instance
+        # Note: FastMCP doesn't accept version parameter, version is stored in server info
         self.mcp = FastMCP(
             name=self.name,
-            version=self.version,
             json_response=True,  # Use JSON content blocks for structured responses
         )
         
@@ -138,17 +151,53 @@ class MCPServer:
     def _register_capabilities(self) -> None:
         """Register server capabilities (tools, resources, prompts).
         
-        This method will be expanded in later phases to register actual tools.
-        For now, it's a placeholder for capabilities declaration.
+        This method registers all tools with FastMCP and the tool registry.
         """
         logger.info("Registering server capabilities...")
         
-        # Capabilities will be registered in later phases:
-        # - Tools: analyze_n8n_workflow, extract_custom_logic, etc.
-        # - Resources: guides
-        # - Prompts: (if needed)
+        # Map of tool names to handler functions
+        tool_handlers = {
+            "analyze_n8n_workflow": analyze_n8n_workflow,
+            "extract_custom_logic": extract_custom_logic,
+            "generate_langgraph_implementation": generate_langgraph_implementation,
+            "validate_implementation": validate_implementation,
+            "list_guides": list_guides,
+            "query_guide": query_guide,
+        }
         
-        logger.info("Server capabilities registered (placeholder)")
+        # Register each tool with both FastMCP and the registry
+        for tool_name, handler in tool_handlers.items():
+            if tool_name not in TOOL_SCHEMAS:
+                logger.warning(f"Tool '{tool_name}' not found in schemas, skipping")
+                continue
+            
+            schema = TOOL_SCHEMAS[tool_name]
+            
+            # Register with FastMCP using programmatic registration
+            # FastMCP.tool() must be called as a decorator: mcp.tool(name="...", description="...")(handler)
+            # First call returns a decorator, second call applies it to the handler
+            decorator = self.mcp.tool(name=tool_name, description=schema.get("description", ""))
+            decorator(handler)
+            
+            # Register with our internal registry for management
+            self.tool_registry.register(
+                name=tool_name,
+                handler=handler,
+                schema=schema,
+                version="1.0.0",
+                description=schema.get("description", ""),
+                enabled=True,
+            )
+            
+            logger.debug(f"Registered tool: {tool_name}")
+        
+        logger.info(
+            f"✓ Registered {self.tool_registry.count_enabled()} tools "
+            f"({self.tool_registry.count()} total)"
+        )
+        
+        # Resources will be registered in Fase 9
+        # Prompts: (if needed)
 
     async def start(self) -> None:
         """Start the MCP server.
@@ -175,10 +224,10 @@ class MCPServer:
                 logger.info("Server ready. Waiting for requests...")
                 
                 # Run the MCP server
+                # FastMCP.run() accepts read_stream and write_stream directly
                 await self.mcp.run(
                     read_stream=read_stream,
                     write_stream=write_stream,
-                    initialization_options=self.mcp.create_initialization_options(),
                 )
         except KeyboardInterrupt:
             logger.info("Received interrupt signal. Shutting down...")
