@@ -1,110 +1,39 @@
-# ============================================================================
 # Environment Configuration Template
-# ============================================================================
 # Copy this file to .env and fill in your actual values
 # NEVER commit the .env file to version control
 
-# ----------------------------------------------------------------------------
 # LLM Provider Configuration
-# ----------------------------------------------------------------------------
-# Select which LLM provider to use: openai, openrouter, xai
-# Default: openai (if not set)
+# Select which LLM provider to use: openai, openrouter, xai (default: openai)
 LLM_PROVIDER=openai
 
-# ----------------------------------------------------------------------------
 # OpenAI Configuration
-# ----------------------------------------------------------------------------
 # Get your API key from: https://platform.openai.com/api-keys
 OPENAI_API_KEY=sk-your-openai-api-key-here
+# OPENAI_MODEL=gpt-4o-mini  # Optional: override default model
 
-# Optional: Override default model (default: gpt-4o-mini)
-# OPENAI_MODEL=gpt-4o-mini
-
-# ----------------------------------------------------------------------------
 # OpenRouter Configuration
-# ----------------------------------------------------------------------------
-# OpenRouter provides access to multiple LLM models including GPT, Claude, Grok, etc.
 # Get your API key from: https://openrouter.ai/keys
-# 
-# To use OpenRouter:
-# 1. Set LLM_PROVIDER=openrouter
-# 2. Set OPENROUTER_API_KEY to your OpenRouter API key
-# 3. Optionally set OPENROUTER_MODEL (default: openai/gpt-4o-mini)
-#
-# Available models on OpenRouter (examples):
-# - openai/gpt-4o, openai/gpt-4o-mini, openai/gpt-4-turbo
-# - anthropic/claude-3.5-sonnet, anthropic/claude-3-opus
-# - x-ai/grok-beta, x-ai/grok-2
-# - google/gemini-pro
-# - meta-llama/llama-3.1-70b-instruct
-#
-# Example configuration:
-# LLM_PROVIDER=openrouter
-# OPENROUTER_API_KEY=sk-or-v1-your-openrouter-api-key-here
-# OPENROUTER_MODEL=x-ai/grok-beta
-
+# Available models: openai/gpt-4o, anthropic/claude-3.5-sonnet, x-ai/grok-beta, etc.
 OPENROUTER_API_KEY=sk-or-v1-your-openrouter-api-key-here
+# OPENROUTER_MODEL=x-ai/grok-beta  # Optional: override default model
+# OPENROUTER_REFERER=https://github.com/catlang  # Optional: HTTP Referer header
+# OPENROUTER_APP_NAME=CatLang  # Optional: Application name header
 
-# Optional: Override default model (default: openai/gpt-4o-mini)
-# OPENROUTER_MODEL=x-ai/grok-beta
-
-# Optional: HTTP Referer header (recommended by OpenRouter)
-# OPENROUTER_REFERER=https://github.com/catlang
-
-# Optional: Application name header
-# OPENROUTER_APP_NAME=CatLang
-
-# ----------------------------------------------------------------------------
 # xAI (Grok) Configuration
-# ----------------------------------------------------------------------------
-# Direct access to xAI Grok models
 # Get your API key from: https://console.x.ai/
-# 
-# To use xAI directly:
-# 1. Set LLM_PROVIDER=xai
-# 2. Set XAI_API_KEY to your xAI API key
-# 3. Optionally set XAI_MODEL (default: grok-beta)
-#
-# Available models:
-# - grok-beta
-# - grok-2
-# - grok-2-1212
-# - grok-2-vision-1212
-#
-# Example configuration:
-# LLM_PROVIDER=xai
-# XAI_API_KEY=xai-your-xai-api-key-here
-# XAI_MODEL=grok-beta
-
+# Available models: grok-beta, grok-2, grok-2-1212, grok-2-vision-1212
 XAI_API_KEY=xai-your-xai-api-key-here
+# XAI_MODEL=grok-beta  # Optional: override default model
 
-# Optional: Override default model (default: grok-beta)
-# XAI_MODEL=grok-beta
-
-# ----------------------------------------------------------------------------
 # Hunter.io Configuration
-# ----------------------------------------------------------------------------
 # Get your API key from: https://hunter.io/api_keys
 HUNTER_API_KEY=your-hunter-api-key-here
 
-# ----------------------------------------------------------------------------
 # Google Sheets Configuration
-# ----------------------------------------------------------------------------
-# The ID of your Google Spreadsheet (from the URL)
-# Example URL: https://docs.google.com/spreadsheets/d/SPREADSHEET_ID_HERE/edit
+# Spreadsheet ID from URL: https://docs.google.com/spreadsheets/d/SPREADSHEET_ID_HERE/edit
 GOOGLE_SPREADSHEET_ID=your-spreadsheet-id-here
 
-# ----------------------------------------------------------------------------
 # Google OAuth2 Credentials
-# ----------------------------------------------------------------------------
-# Download credentials.json from Google Cloud Console:
-# 1. Go to https://console.cloud.google.com/apis/credentials
-# 2. Create OAuth 2.0 Client ID (Desktop application)
-# 3. Download as credentials.json and place in project root
-# 
-# Required APIs to enable:
-# - Google Sheets API
-# - Gmail API
-#
-# On first run, you'll authenticate and token.json will be created automatically
-
+# Download credentials.json from: https://console.cloud.google.com/apis/credentials
+# Required APIs: Google Sheets API, Gmail API
+# On first run, token.json will be created automatically after authentication
