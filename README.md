@@ -41,11 +41,9 @@ cp env_template.txt .env
 # Edit .env and add your OPENAI_API_KEY
 ```
 
-4. Configure Claude Desktop (see [Claude Desktop Setup Guide](docs/CLAUDE_DESKTOP_SETUP.md))
+4. Configure Claude Desktop (see MCP configuration documentation)
 
 5. Start using the tools in Claude Desktop!
-
-For detailed setup instructions, see the [MCP Server Setup Guide](docs/MCP_SERVER_SETUP.md).
 
 ### As Standalone Workflow Converter
 
@@ -72,7 +70,6 @@ The server also provides access to implementation guides as MCP resources:
 - **Categories**: `implementation`, `paradigm`, `setup`, `testing`, `integration`, `structure`, `requirements`, `general`
 - Access guides via MCP resource protocol or use the `list_guides` and `query_guide` tools
 
-For detailed usage examples, see [Usage Examples](docs/USAGE_EXAMPLES.md).
 
 ---
 
@@ -183,40 +180,6 @@ cp env_template.txt .env
 3. Verify compliance with implementation guides
 4. Test and iterate as needed
 
-## Example Implementation
-
-This repository includes a complete example conversion: **Automated Outbound Sales Email Campaign**
-
-### Workflow Process
-1. Reads company URLs from Google Sheets
-2. Fetches and extracts website content
-3. Generates company summaries using OpenAI (gpt-4o-mini)
-4. Finds contact emails via Hunter.io
-5. Generates personalized cold emails
-6. Creates Gmail drafts
-7. Logs successes and failures back to Google Sheets
-
-### Implementation Details
-
-**Paradigm**: Functional API with `@entrypoint` (Synchronous pattern)
-
-**Justification**:
-- Sequential workflow with simple if/else conditional branching
-- No need for complex state management or parallel execution
-- Standard Python control flow is adequate
-- Matches "Simple to Moderate" complexity profile
-
-### Running the Example
-
-1. Set up environment variables (see `env_template.txt`)
-2. Configure Google Cloud credentials (see `guides/authentication-setup.md`)
-3. Run the workflow:
-```bash
-python src/workflow.py
-```
-
-For detailed setup instructions, see the example workflow's documentation in `src/workflow.py`.
-
 ## Project Structure
 
 ```
@@ -224,11 +187,6 @@ catlang/
 ├── config/                        # Configuration files
 │   ├── server.yaml                # MCP server configuration
 │   └── providers.yaml            # LLM provider configuration
-├── docs/                          # Documentation
-│   ├── MCP_SERVER_SETUP.md       # MCP server setup guide
-│   ├── CLAUDE_DESKTOP_SETUP.md   # Claude Desktop integration guide
-│   ├── USAGE_EXAMPLES.md         # Usage examples
-│   └── TESTING.md                 # Testing documentation
 ├── guides/                        # Implementation guides (MCP resources)
 │   ├── api-integration.md
 │   ├── authentication-setup.md
@@ -243,9 +201,7 @@ catlang/
 │   │   ├── server.py              # Main server
 │   │   ├── tools/                 # Tool implementations
 │   │   └── resources/            # Resource handlers
-│   ├── llm_provider/              # LLM provider abstraction
-│   ├── workflow_engine/           # Workflow engine (future)
-│   └── workflow.py               # Example: Sales email campaign
+│   └── llm_provider/              # LLM provider abstraction
 ├── tests/                         # Test suite
 │   ├── test_fase10_mcp_integration.py
 │   └── ...                       # Other test files
@@ -311,12 +267,6 @@ For more detailed troubleshooting, see `guides/testing-and-troubleshooting.md`.
 - Use minimal OAuth scopes required
 - Review security best practices in implementation guides
 
-## Documentation
-
-- [MCP Server Setup Guide](docs/MCP_SERVER_SETUP.md) - Complete setup instructions for MCP server
-- [Claude Desktop Integration](docs/CLAUDE_DESKTOP_SETUP.md) - Configure Claude Desktop to use CatLang
-- [Usage Examples](docs/USAGE_EXAMPLES.md) - Examples of using all tools
-- [Testing Guide](docs/TESTING.md) - Running tests and test coverage
 
 ## External Documentation References
 

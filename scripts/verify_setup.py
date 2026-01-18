@@ -89,7 +89,6 @@ def main():
     directories = [
         "src/mcp_server",
         "src/llm_provider",
-        "src/workflow_engine",
         "config",
         "tests",
     ]
