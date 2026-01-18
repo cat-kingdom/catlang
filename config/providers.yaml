@@ -15,6 +15,40 @@ providers:
     timeout: 60
     max_retries: 3
     
+  openrouter:
+    enabled: true
+    type: "openrouter"
+    default_model: "openai/gpt-4o-mini"  # Can use any model from OpenRouter
+    available_models:
+      - "openai/gpt-4o"
+      - "openai/gpt-4o-mini"
+      - "openai/gpt-4-turbo"
+      - "openai/gpt-3.5-turbo"
+      - "anthropic/claude-3.5-sonnet"
+      - "anthropic/claude-3-opus"
+      - "x-ai/grok-beta"
+      - "x-ai/grok-2"
+      - "google/gemini-pro"
+      - "meta-llama/llama-3.1-70b-instruct"
+    api_key_env: "OPENROUTER_API_KEY"
+    timeout: 60
+    max_retries: 3
+    referer: "https://github.com/catlang"  # Optional: HTTP Referer header
+    app_name: "CatLang"  # Optional: X-Title header
+    
+  xai:
+    enabled: true
+    type: "xai"
+    default_model: "grok-beta"
+    available_models:
+      - "grok-beta"
+      - "grok-2"
+      - "grok-2-1212"
+      - "grok-2-vision-1212"
+    api_key_env: "XAI_API_KEY"
+    timeout: 60
+    max_retries: 3
+    
   # Future providers (disabled for MVP)
   # anthropic:
   #   enabled: false

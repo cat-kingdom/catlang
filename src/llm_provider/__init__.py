@@ -6,6 +6,8 @@ from .base import (
     GenerationResponse,
 )
 from .openai import OpenAIProvider
+from .openrouter import OpenRouterProvider
+from .xai import XAIProvider
 from .config import (
     ProviderConfig,
     load_provider_config,
@@ -25,6 +27,8 @@ __all__ = [
     "GenerationResponse",
     # Providers
     "OpenAIProvider",
+    "OpenRouterProvider",
+    "XAIProvider",
     # Configuration
     "ProviderConfig",
     "load_provider_config",

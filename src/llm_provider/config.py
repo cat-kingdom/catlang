@@ -106,6 +106,20 @@ class ProviderConfig:
                 "timeout": "OPENAI_TIMEOUT",
                 "max_retries": "OPENAI_MAX_RETRIES",
             },
+            "openrouter": {
+                "api_key": "OPENROUTER_API_KEY",
+                "model": "OPENROUTER_MODEL",
+                "timeout": "OPENROUTER_TIMEOUT",
+                "max_retries": "OPENROUTER_MAX_RETRIES",
+                "referer": "OPENROUTER_REFERER",
+                "app_name": "OPENROUTER_APP_NAME",
+            },
+            "xai": {
+                "api_key": "XAI_API_KEY",
+                "model": "XAI_MODEL",
+                "timeout": "XAI_TIMEOUT",
+                "max_retries": "XAI_MAX_RETRIES",
+            },
             "anthropic": {
                 "api_key": "ANTHROPIC_API_KEY",
                 "model": "ANTHROPIC_MODEL",
@@ -200,6 +214,8 @@ class ProviderConfig:
         # Check required fields based on provider type
         required_fields = {
             "openai": ["type", "api_key_env"],
+            "openrouter": ["type", "api_key_env"],
+            "xai": ["type", "api_key_env"],
             "anthropic": ["type", "api_key_env"],
             "google": ["type", "api_key_env"],
         }

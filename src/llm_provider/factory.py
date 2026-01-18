@@ -10,6 +10,8 @@ from typing import Dict, Any, Optional, Type
 
 from .base import BaseLLMProvider
 from .openai import OpenAIProvider
+from .openrouter import OpenRouterProvider
+from .xai import XAIProvider
 from .config import ProviderConfig, load_provider_config, get_provider_from_env
 
 logger = logging.getLogger(__name__)
@@ -18,6 +20,8 @@ logger = logging.getLogger(__name__)
 # Provider registry: maps provider type to provider class
 _PROVIDER_REGISTRY: Dict[str, Type[BaseLLMProvider]] = {
     "openai": OpenAIProvider,
+    "openrouter": OpenRouterProvider,
+    "xai": XAIProvider,
     # Future providers can be added here:
     # "anthropic": AnthropicProvider,
     # "google": GoogleProvider,
