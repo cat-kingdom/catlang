@@ -9,6 +9,7 @@ import logging
 from typing import Any, Dict, Optional
 
 from ...llm_provider import create_from_env
+from ..resources.guides import GuideResourceManager
 from .analyze import (
     parse_n8n_workflow,
     validate_n8n_schema,
@@ -60,6 +61,9 @@ logger = logging.getLogger(__name__)
 # Context variable to store server instance for provider access
 _server_instance: Optional[Any] = None
 
+# Context variable to store resource manager (for tool handlers)
+_resource_manager_tool: Optional[GuideResourceManager] = None
+
 
 def set_server_instance(server_instance: Any) -> None:
     """Set the server instance for provider access.
@@ -72,6 +76,12 @@ def set_server_instance(server_instance: Any) -> None:
     global _server_instance
     _server_instance = server_instance
     logger.debug("Server instance set for handler context")
+    
+    # Also set resource manager if available
+    if hasattr(server_instance, "resource_manager"):
+        global _resource_manager_tool
+        _resource_manager_tool = server_instance.resource_manager
+        logger.debug("Resource manager set for handler context")
 
 
 def _get_llm_provider():
@@ -689,9 +699,6 @@ async def list_guides(
 ) -> Dict[str, Any]:
     """List all available implementation guides.
     
-    This is a placeholder implementation. Full implementation will be
-    done in Fase 9.
-    
     Args:
         category: Filter by category (optional)
         tags: Filter by tags (optional)
@@ -704,16 +711,52 @@ async def list_guides(
         f"(category={category}, tags={tags})"
     )
     
-    # Placeholder response
-    return {
-        "status": "not_implemented",
-        "message": "This tool will be implemented in Fase 9",
-        "filters": {
-            "category": category,
-            "tags": tags,
-        },
-        "guides": [],
-    }
+    # Get resource manager from server instance or global context
+    resource_manager = _resource_manager_tool
+    if resource_manager is None and _server_instance is not None:
+        if hasattr(_server_instance, "resource_manager"):
+            resource_manager = _server_instance.resource_manager
+    
+    if resource_manager is None:
+        logger.error("Resource manager not available")
+        return {
+            "status": "error",
+            "error": "Resource manager not initialized",
+            "guides": [],
+            "count": 0,
+        }
+    
+    try:
+        
+        # Ensure resource manager is initialized
+        if not resource_manager._initialized:
+            resource_manager.initialize()
+        
+        # List guides with filters
+        guides = resource_manager.indexer.list_guides(category=category, tags=tags)
+        
+        # Convert to response format
+        guides_list = [guide.to_dict() for guide in guides]
+        
+        logger.info(f"Listed {len(guides_list)} guides")
+        return {
+            "status": "success",
+            "guides": guides_list,
+            "count": len(guides_list),
+            "filters": {
+                "category": category,
+                "tags": tags,
+            },
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to list guides: {e}", exc_info=True)
+        return {
+            "status": "error",
+            "error": f"Failed to list guides: {e}",
+            "guides": [],
+            "count": 0,
+        }
 
 
 async def query_guide(
@@ -722,26 +765,87 @@ async def query_guide(
 ) -> Dict[str, Any]:
     """Query a specific implementation guide.
     
-    This is a placeholder implementation. Full implementation will be
-    done in Fase 9.
-    
     Args:
         guide_name: Name of the guide to query
         category: Category of the guide (optional)
         
     Returns:
-        Dictionary containing guide content
+        Dictionary containing guide content and metadata
     """
     logger.info(
         f"query_guide called "
         f"(guide_name={guide_name}, category={category})"
     )
     
-    # Placeholder response
-    return {
-        "status": "not_implemented",
-        "message": "This tool will be implemented in Fase 9",
-        "guide_name": guide_name,
-        "category": category,
-        "content": None,
-    }
+    # Validate input
+    if not guide_name or not guide_name.strip():
+        return {
+            "status": "error",
+            "error": "Guide name cannot be empty",
+            "guide_name": guide_name,
+        }
+    
+    # Get resource manager from server instance or global context
+    resource_manager = _resource_manager_tool
+    if resource_manager is None and _server_instance is not None:
+        if hasattr(_server_instance, "resource_manager"):
+            resource_manager = _server_instance.resource_manager
+    
+    if resource_manager is None:
+        logger.error("Resource manager not available")
+        return {
+            "status": "error",
+            "error": "Resource manager not initialized",
+            "guide_name": guide_name,
+        }
+    
+    try:
+        
+        # Ensure resource manager is initialized
+        if not resource_manager._initialized:
+            resource_manager.initialize()
+        
+        # Get guide metadata
+        guide = resource_manager.indexer.get_guide(guide_name, category=category)
+        
+        if guide is None:
+            logger.warning(f"Guide not found: {guide_name} (category={category})")
+            return {
+                "status": "error",
+                "error": f"Guide '{guide_name}' not found",
+                "guide_name": guide_name,
+                "category": category,
+            }
+        
+        # Get guide content
+        content = resource_manager.get_guide_content(guide_name, category=category)
+        
+        if content is None:
+            logger.warning(f"Guide content not found: {guide_name}")
+            return {
+                "status": "error",
+                "error": f"Guide content not found for '{guide_name}'",
+                "guide_name": guide_name,
+            }
+        
+        logger.info(f"Retrieved guide: {guide_name}")
+        return {
+            "status": "success",
+            "guide_name": guide_name,
+            "category": guide.category,
+            "title": guide.title,
+            "description": guide.description,
+            "tags": guide.tags,
+            "uri": guide.uri,
+            "content": content,
+            "last_modified": guide.last_modified.isoformat() if guide.last_modified else None,
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to query guide: {e}", exc_info=True)
+        return {
+            "status": "error",
+            "error": f"Failed to query guide: {e}",
+            "guide_name": guide_name,
+            "category": category,
+        }

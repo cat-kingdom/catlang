@@ -14,6 +14,12 @@ from mcp.server.fastmcp import FastMCP
 from mcp.server.stdio import stdio_server
 
 from ..llm_provider import create_from_env
+from .resources.guides import GuideResourceManager
+from .resources.handlers import (
+    set_resource_manager,
+    list_all_guide_resources,
+    get_guide_resource,
+)
 from .tools.registry import get_registry
 from .tools.schemas import TOOL_SCHEMAS
 from .tools.handlers import (
@@ -73,6 +79,9 @@ class MCPServer:
         
         # Initialize tool registry
         self.tool_registry = get_registry()
+        
+        # Initialize resource manager
+        self.resource_manager = GuideResourceManager(self.guides_path)
         
         # Setup logging
         self._setup_logging()
@@ -200,8 +209,37 @@ class MCPServer:
             f"({self.tool_registry.count()} total)"
         )
         
-        # Resources will be registered in Fase 9
+        # Register resources
+        self._register_resources()
+        
         # Prompts: (if needed)
+
+    def _register_resources(self) -> None:
+        """Register MCP resources (guides).
+        
+        This method registers guide resources with FastMCP.
+        """
+        logger.info("Registering resources...")
+        
+        # Initialize resource manager
+        self.resource_manager.initialize()
+        
+        # Set resource manager for handler access
+        set_resource_manager(self.resource_manager)
+        
+        # Register resource for listing all guides
+        @self.mcp.resource("guide://list")
+        async def list_guides_resource() -> list[dict[str, Any]]:
+            """List all available guide resources."""
+            return await list_all_guide_resources()
+        
+        # Register resource template for individual guides
+        @self.mcp.resource("guide://docs/{category}/{name}")
+        async def get_guide_resource_handler(category: str, name: str) -> dict[str, Any]:
+            """Get a specific guide resource by category and name."""
+            return await get_guide_resource(category, name)
+        
+        logger.info("✓ Registered guide resources")
 
     async def start(self) -> None:
         """Start the MCP server.
