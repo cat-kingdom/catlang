@@ -2,7 +2,7 @@
   <img src="cover.png" alt="CatLang Cover" width="800"/>
 </div>
 
-# CatLang - n8n to LangGraph Converter with MCP Server
+# [CatLang - n8n to LangGraph Converter with MCP Server](http://muhfajaragus.com/cat_kingdom/catlang)
 
 Framework for converting n8n workflows into LangGraph implementations. Available as an **MCP Server** for integration with Claude Desktop and other MCP clients, as well as a standalone tool.
 
@@ -13,7 +13,7 @@ Framework for converting n8n workflows into LangGraph implementations. Available
 **Installation:**
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/cat-kingdom/catlang.git
 cd catlang
 pip install -r requirements.txt
 cp env_template.txt .env
