@@ -40,6 +40,20 @@ from .generate import (
     validate_paradigm,
     validate_output_format,
 )
+from .validate import (
+    validate_code_input,
+    check_python_syntax,
+    validate_imports,
+    check_basic_types,
+    detect_paradigm,
+    check_langgraph_patterns,
+    verify_decorators,
+    check_serialization,
+    validate_guide_compliance,
+    check_code_quality,
+    generate_llm_suggestions,
+    format_validation_report,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -487,17 +501,15 @@ async def validate_implementation(
 ) -> Dict[str, Any]:
     """Validate LangGraph implementation code.
     
-    This is a placeholder implementation. Full implementation will be
-    done in Fase 8.
-    
     Args:
         code: LangGraph implementation code to validate
         check_syntax: Check Python syntax errors
         check_compliance: Check LangGraph pattern compliance
-        check_best_practices: Check best practices
+        check_best_practices: Check best practices and generate suggestions
         
     Returns:
-        Dictionary containing validation results
+        Dictionary containing validation results with status, syntax results,
+        compliance issues, quality issues, and suggestions
     """
     logger.info(
         f"validate_implementation called "
@@ -506,17 +518,169 @@ async def validate_implementation(
     )
     logger.debug(f"Code length: {len(code)} characters")
     
-    # Placeholder response
-    return {
-        "status": "not_implemented",
-        "message": "This tool will be implemented in Fase 8",
-        "code_length": len(code),
-        "checks": {
-            "syntax": check_syntax,
-            "compliance": check_compliance,
-            "best_practices": check_best_practices,
-        },
-    }
+    try:
+        # Validate code input
+        is_valid, error_msg = validate_code_input(code)
+        if not is_valid:
+            return {
+                "status": "error",
+                "error": f"Invalid code input: {error_msg}",
+                "code_length": len(code),
+            }
+        
+        # Initialize results
+        syntax_result = {"valid": True, "errors": [], "warnings": []}
+        compliance_issues = []
+        quality_issues = []
+        suggestions = []
+        detected_paradigm = "unknown"
+        
+        # 1. Syntax Validation
+        if check_syntax:
+            try:
+                is_syntax_valid, syntax_error_msg, syntax_error = check_python_syntax(code)
+                syntax_result["valid"] = is_syntax_valid
+                
+                if not is_syntax_valid:
+                    syntax_result["errors"].append({
+                        "type": "error",
+                        "category": "syntax",
+                        "severity": "error",
+                        "message": syntax_error_msg or "Syntax error",
+                        "line": syntax_error.lineno if syntax_error else None,
+                        "column": syntax_error.offset if syntax_error else None,
+                        "code_snippet": syntax_error.text.strip() if syntax_error and syntax_error.text else None,
+                        "suggestion": "Fix syntax errors before proceeding",
+                        "guide_reference": None,
+                    })
+                else:
+                    # Check imports and basic types only if syntax is valid
+                    import_issues = validate_imports(code)
+                    syntax_result["warnings"].extend(import_issues)
+                    
+                    type_issues = check_basic_types(code)
+                    if type_issues:
+                        syntax_result["warnings"].extend(type_issues)
+                        
+            except Exception as e:
+                logger.error(f"Syntax validation failed: {e}")
+                syntax_result["valid"] = False
+                syntax_result["errors"].append({
+                    "type": "error",
+                    "category": "syntax",
+                    "severity": "error",
+                    "message": f"Syntax validation error: {e}",
+                    "line": None,
+                    "column": None,
+                    "code_snippet": None,
+                    "suggestion": "Check code for syntax errors",
+                    "guide_reference": None,
+                })
+        
+        # 2. Compliance Checking (only if syntax is valid or check_compliance is True)
+        if check_compliance:
+            try:
+                # Detect paradigm
+                detected_paradigm = detect_paradigm(code)
+                
+                # Check LangGraph patterns
+                pattern_issues = check_langgraph_patterns(code, detected_paradigm)
+                compliance_issues.extend(pattern_issues)
+                
+                # Verify decorators
+                decorator_issues = verify_decorators(code, detected_paradigm)
+                compliance_issues.extend(decorator_issues)
+                
+                # Check serialization
+                serialization_issues = check_serialization(code)
+                compliance_issues.extend(serialization_issues)
+                
+                # Validate guide compliance
+                try:
+                    guides = load_all_guides()
+                    guide_compliance_issues = validate_guide_compliance(code, guides)
+                    compliance_issues.extend(guide_compliance_issues)
+                except Exception as e:
+                    logger.warning(f"Failed to load guides for compliance checking: {e}")
+                    
+            except Exception as e:
+                logger.error(f"Compliance checking failed: {e}")
+                compliance_issues.append({
+                    "type": "error",
+                    "category": "compliance",
+                    "severity": "error",
+                    "message": f"Compliance checking error: {e}",
+                    "line": None,
+                    "column": None,
+                    "code_snippet": None,
+                    "suggestion": "Review compliance checking error",
+                    "guide_reference": None,
+                })
+        
+        # 3. Best Practices Checking
+        if check_best_practices:
+            try:
+                # Check code quality
+                quality_issues_list = check_code_quality(code)
+                quality_issues.extend(quality_issues_list)
+                
+                # Generate LLM suggestions
+                try:
+                    provider = _get_llm_provider()
+                    validation_results = {
+                        "syntax": syntax_result,
+                        "compliance": {
+                            "issues": compliance_issues,
+                            "paradigm_detected": detected_paradigm,
+                        },
+                    }
+                    llm_suggestions = generate_llm_suggestions(code, provider, validation_results)
+                    suggestions.extend(llm_suggestions)
+                except Exception as e:
+                    logger.warning(f"Failed to generate LLM suggestions: {e}")
+                    # Continue without LLM suggestions
+                    
+            except Exception as e:
+                logger.error(f"Best practices checking failed: {e}")
+                quality_issues.append({
+                    "type": "error",
+                    "category": "quality",
+                    "severity": "error",
+                    "message": f"Best practices checking error: {e}",
+                    "line": None,
+                    "column": None,
+                    "code_snippet": None,
+                    "suggestion": "Review best practices checking error",
+                    "guide_reference": None,
+                })
+        
+        # Format validation report
+        report = format_validation_report(
+            syntax_result=syntax_result,
+            compliance_issues=compliance_issues,
+            quality_issues=quality_issues,
+            suggestions=suggestions,
+            code_length=len(code),
+            paradigm=detected_paradigm,
+        )
+        
+        logger.info(
+            f"Validation complete: "
+            f"valid={report['valid']}, "
+            f"errors={report['summary']['total_errors']}, "
+            f"warnings={report['summary']['total_warnings']}, "
+            f"suggestions={report['summary']['total_suggestions']}"
+        )
+        
+        return report
+        
+    except Exception as e:
+        logger.error(f"Unexpected error in validate_implementation: {e}", exc_info=True)
+        return {
+            "status": "error",
+            "error": f"Unexpected error: {e}",
+            "code_length": len(code),
+        }
 
 
 async def list_guides(
