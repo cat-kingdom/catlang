@@ -20,9 +20,8 @@ from src.mcp_server.tools.validate import (
 )
 from src.mcp_server.tools.handlers import (
     validate_implementation,
-    set_server_instance,
-    _get_llm_provider,
 )
+from src.mcp_server.context import HandlerContext
 from src.llm_provider.base import GenerationResponse
 
 
@@ -806,7 +805,7 @@ class TestValidateImplementationHandler:
         
         mock_server = Mock()
         mock_server._get_llm_provider.return_value = mock_provider
-        set_server_instance(mock_server)
+        HandlerContext.set(mock_server)
         
         result = await validate_implementation(
             code=VALID_FUNCTIONAL_CODE,
@@ -828,7 +827,7 @@ class TestValidateImplementationHandler:
         
         mock_server = Mock()
         mock_server._get_llm_provider.return_value = mock_provider
-        set_server_instance(mock_server)
+        HandlerContext.set(mock_server)
         
         result = await validate_implementation(
             code=VALID_FUNCTIONAL_CODE,

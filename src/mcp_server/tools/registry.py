@@ -5,7 +5,7 @@ versioning, and routing.
 """
 
 import logging
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable
 from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
@@ -18,10 +18,10 @@ class ToolMetadata:
     name: str
     version: str
     handler: Callable
-    schema: Dict[str, Any]
+    schema: dict[str, Any]
     enabled: bool = True
-    description: Optional[str] = None
-    tags: Optional[List[str]] = None
+    description: str | None = None
+    tags: list[str] | None = None
 
 
 class ToolRegistry:
@@ -36,18 +36,18 @@ class ToolRegistry:
     
     def __init__(self):
         """Initialize empty tool registry."""
-        self._tools: Dict[str, ToolMetadata] = {}
-        self._versions: Dict[str, List[str]] = {}  # name -> [versions]
+        self._tools: dict[str, ToolMetadata] = {}
+        self._versions: dict[str, list[str]] = {}  # name -> [versions]
         logger.info("Tool registry initialized")
     
     def register(
         self,
         name: str,
         handler: Callable,
-        schema: Dict[str, Any],
+        schema: dict[str, Any],
         version: str = "1.0.0",
-        description: Optional[str] = None,
-        tags: Optional[List[str]] = None,
+        description: str | None = None,
+        tags: list[str] | None = None,
         enabled: bool = True,
     ) -> None:
         """Register a tool in the registry.
@@ -100,7 +100,7 @@ class ToolRegistry:
             f"(enabled={enabled})"
         )
     
-    def get(self, name: str) -> Optional[ToolMetadata]:
+    def get(self, name: str) -> ToolMetadata | None:
         """Get tool metadata by name.
         
         Args:
@@ -111,7 +111,7 @@ class ToolRegistry:
         """
         return self._tools.get(name)
     
-    def get_handler(self, name: str) -> Optional[Callable]:
+    def get_handler(self, name: str) -> Callable | None:
         """Get tool handler function by name.
         
         Args:
@@ -125,7 +125,7 @@ class ToolRegistry:
             return tool.handler
         return None
     
-    def list_tools(self, enabled_only: bool = True) -> List[str]:
+    def list_tools(self, enabled_only: bool = True) -> list[str]:
         """List all registered tool names.
         
         Args:
@@ -141,7 +141,7 @@ class ToolRegistry:
             ]
         return list(self._tools.keys())
     
-    def get_all_schemas(self) -> Dict[str, Dict[str, Any]]:
+    def get_all_schemas(self) -> dict[str, dict[str, Any]]:
         """Get all tool schemas.
         
         Returns:
@@ -153,7 +153,7 @@ class ToolRegistry:
             if tool.enabled
         }
     
-    def get_versions(self, name: str) -> List[str]:
+    def get_versions(self, name: str) -> list[str]:
         """Get all versions for a tool.
         
         Args:
@@ -239,8 +239,8 @@ def get_registry() -> ToolRegistry:
 
 
 def register_tools(
-    tools: List[Dict[str, Any]],
-    registry: Optional[ToolRegistry] = None,
+    tools: list[dict[str, Any]],
+    registry: ToolRegistry | None = None,
 ) -> None:
     """Register multiple tools at once.
     

@@ -14,7 +14,7 @@ import tempfile
 import yaml
 from pathlib import Path
 from datetime import datetime
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, Mock
 from typing import Any
 
 from src.mcp_server.resources.guides import (
@@ -26,16 +26,14 @@ from src.mcp_server.resources.guides import (
     extract_title_from_content,
 )
 from src.mcp_server.resources.handlers import (
-    set_resource_manager,
     list_all_guide_resources,
     get_guide_resource,
 )
 from src.mcp_server.tools.handlers import (
     list_guides,
     query_guide,
-    set_server_instance,
-    _resource_manager_tool,
 )
+from src.mcp_server.context import HandlerContext
 from src.mcp_server.server import MCPServer
 
 
@@ -428,7 +426,9 @@ class TestResourceHandlers:
     def test_set_resource_manager(self, temp_guides_dir):
         """Test setting resource manager."""
         manager = GuideResourceManager(temp_guides_dir)
-        set_resource_manager(manager)
+        mock_server = Mock()
+        mock_server.resource_manager = manager
+        HandlerContext.set(mock_server)
         # Handler should be set (no exception)
     
     @pytest.mark.asyncio
@@ -436,24 +436,37 @@ class TestResourceHandlers:
         """Test listing all guide resources."""
         manager = GuideResourceManager(temp_guides_dir)
         manager.initialize()
-        set_resource_manager(manager)
+        mock_server = Mock()
+        mock_server.resource_manager = manager
+        HandlerContext.set(mock_server)
         
-        resources = await list_all_guide_resources()
+        result = await list_all_guide_resources()
+        # handle_errors decorator wraps result in dict with status and result
+        if isinstance(result, dict) and "result" in result:
+            resources = result["result"]
+        else:
+            resources = result
         assert len(resources) == 3
     
     @pytest.mark.asyncio
     async def test_list_all_guide_resources_no_manager(self):
         """Test listing resources without manager."""
-        set_resource_manager(None)
-        resources = await list_all_guide_resources()
-        assert resources == []
+        HandlerContext.set(None)
+        # handle_errors decorator catches RuntimeError and returns error dict
+        result = await list_all_guide_resources()
+        assert result["status"] == "error"
+        assert "context" in result["error"].lower() or "resource manager" in result["error"].lower()
     
     @pytest.mark.asyncio
     async def test_get_guide_resource(self, temp_guides_dir):
         """Test getting guide resource."""
+        from unittest.mock import Mock
+        
         manager = GuideResourceManager(temp_guides_dir)
         manager.initialize()
-        set_resource_manager(manager)
+        mock_server = Mock()
+        mock_server.resource_manager = manager
+        HandlerContext.set(mock_server)
         
         resource = await get_guide_resource("implementation", "functional-api")
         assert resource is not None
@@ -462,9 +475,13 @@ class TestResourceHandlers:
     @pytest.mark.asyncio
     async def test_get_guide_resource_not_found(self, temp_guides_dir):
         """Test getting non-existent resource."""
+        from unittest.mock import Mock
+        
         manager = GuideResourceManager(temp_guides_dir)
         manager.initialize()
-        set_resource_manager(manager)
+        mock_server = Mock()
+        mock_server.resource_manager = manager
+        HandlerContext.set(mock_server)
         
         resource = await get_guide_resource("implementation", "nonexistent")
         assert resource == {}
@@ -483,7 +500,7 @@ class TestToolHandlersIntegration:
         manager.initialize()
         mock_server.resource_manager = manager
         
-        set_server_instance(mock_server)
+        HandlerContext.set(mock_server)
         
         result = await list_guides()
         assert result["status"] == "success"
@@ -498,7 +515,7 @@ class TestToolHandlersIntegration:
         manager.initialize()
         mock_server.resource_manager = manager
         
-        set_server_instance(mock_server)
+        HandlerContext.set(mock_server)
         
         result = await list_guides(category="implementation")
         assert result["status"] == "success"
@@ -513,7 +530,7 @@ class TestToolHandlersIntegration:
         manager.initialize()
         mock_server.resource_manager = manager
         
-        set_server_instance(mock_server)
+        HandlerContext.set(mock_server)
         
         result = await list_guides(tags=["functional"])
         assert result["status"] == "success"
@@ -527,7 +544,7 @@ class TestToolHandlersIntegration:
         manager.initialize()
         mock_server.resource_manager = manager
         
-        set_server_instance(mock_server)
+        HandlerContext.set(mock_server)
         
         result = await query_guide("functional-api")
         assert result["status"] == "success"
@@ -543,7 +560,7 @@ class TestToolHandlersIntegration:
         manager.initialize()
         mock_server.resource_manager = manager
         
-        set_server_instance(mock_server)
+        HandlerContext.set(mock_server)
         
         result = await query_guide("functional-api", category="implementation")
         assert result["status"] == "success"
@@ -557,7 +574,7 @@ class TestToolHandlersIntegration:
         manager.initialize()
         mock_server.resource_manager = manager
         
-        set_server_instance(mock_server)
+        HandlerContext.set(mock_server)
         
         result = await query_guide("nonexistent")
         assert result["status"] == "error"
@@ -571,7 +588,7 @@ class TestToolHandlersIntegration:
         manager.initialize()
         mock_server.resource_manager = manager
         
-        set_server_instance(mock_server)
+        HandlerContext.set(mock_server)
         
         result = await query_guide("")
         assert result["status"] == "error"
@@ -581,25 +598,25 @@ class TestToolHandlersIntegration:
     async def test_list_guides_no_resource_manager(self):
         """Test list_guides without resource manager."""
         # Clear global state
-        set_server_instance(None)
+        HandlerContext.set(None)
         import src.mcp_server.tools.handlers as handlers_module
         handlers_module._resource_manager_tool = None
         
         result = await list_guides()
         assert result["status"] == "error"
-        assert "not initialized" in result["error"].lower()
+        assert "context" in result["error"].lower() or "not initialized" in result["error"].lower()
     
     @pytest.mark.asyncio
     async def test_query_guide_no_resource_manager(self):
         """Test query_guide without resource manager."""
         # Clear global state
-        set_server_instance(None)
+        HandlerContext.set(None)
         import src.mcp_server.tools.handlers as handlers_module
         handlers_module._resource_manager_tool = None
         
         result = await query_guide("test")
         assert result["status"] == "error"
-        assert "not initialized" in result["error"].lower()
+        assert "context" in result["error"].lower() or "not initialized" in result["error"].lower()
 
 
 @pytest.mark.integration

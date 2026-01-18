@@ -63,6 +63,8 @@ Thumbs.db
 #markdown
 *.md
 !README.md
+
+#other files
 !guides/
 !src/
 examples/

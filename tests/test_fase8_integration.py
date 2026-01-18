@@ -10,8 +10,8 @@ from src.mcp_server.tools.handlers import (
     extract_custom_logic,
     generate_langgraph_implementation,
     validate_implementation,
-    set_server_instance,
 )
+from src.mcp_server.context import HandlerContext
 
 
 # Sample requirements for testing
@@ -62,7 +62,7 @@ def process_data(data):
         
         mock_server = Mock()
         mock_server._get_llm_provider.return_value = mock_provider
-        set_server_instance(mock_server)
+        HandlerContext.set(mock_server)
         
         # Step 1: Generate code
         generation_result = await generate_langgraph_implementation(
@@ -192,7 +192,7 @@ def workflow(input_data):
         
         mock_server = Mock()
         mock_server._get_llm_provider.return_value = mock_provider
-        set_server_instance(mock_server)
+        HandlerContext.set(mock_server)
         
         # Generate
         gen_result = await generate_langgraph_implementation(
@@ -264,7 +264,7 @@ Found custom code node with JavaScript validation logic.
         
         mock_server = Mock()
         mock_server._get_llm_provider.return_value = mock_provider
-        set_server_instance(mock_server)
+        HandlerContext.set(mock_server)
         
         # Step 1: Analyze n8n workflow
         analysis_result = await analyze_n8n_workflow(

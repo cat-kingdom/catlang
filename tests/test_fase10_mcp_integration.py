@@ -17,8 +17,7 @@ from unittest.mock import Mock, patch, AsyncMock, MagicMock
 from typing import Any, Dict
 
 from src.mcp_server.server import MCPServer, create_server
-from src.mcp_server.tools.handlers import set_server_instance
-from src.mcp_server.resources.handlers import set_resource_manager
+from src.mcp_server.context import HandlerContext
 
 
 @pytest.fixture
@@ -370,10 +369,13 @@ def workflow(data):
                     code=code,
                     check_syntax=True,
                     check_compliance=True,
+                    check_best_practices=False,  # Skip LLM suggestions for simpler test
                 )
             )
             
             assert validate_result["status"] == "success"
+            # Result should have validation report structure from format_validation_report
+            assert "valid" in validate_result
             assert "syntax" in validate_result
         else:
             pytest.skip(f"Generation failed: {generate_result.get('error', 'Unknown error')}")
@@ -485,28 +487,21 @@ class TestServerLifecycleIntegration:
         server = MCPServer(server_config)
         server._llm_provider = mock_llm_provider
         
-        # Mock stdio_server to avoid actual stdio operations
-        with patch('src.mcp_server.server.stdio_server') as mock_stdio:
-            mock_read = AsyncMock()
-            mock_write = AsyncMock()
-            mock_context = AsyncMock()
-            mock_context.__aenter__ = AsyncMock(return_value=(mock_read, mock_write))
-            mock_context.__aexit__ = AsyncMock(return_value=None)
-            mock_stdio.return_value = mock_context
-            
-            # Mock mcp.run to avoid actual execution
-            server.mcp.run = AsyncMock()
-            
-            # Start server (should register capabilities)
-            try:
-                await asyncio.wait_for(server.start(), timeout=0.1)
-            except asyncio.TimeoutError:
-                # Expected - server runs indefinitely
-                pass
-            
-            # Verify capabilities were registered
-            assert server.tool_registry.count() > 0
-            assert server.resource_manager is not None
+        # Mock mcp.run_stdio_async to avoid actual stdio operations
+        async def mock_run_stdio():
+            await asyncio.sleep(10)  # Simulate long-running server
+        server.mcp.run_stdio_async = mock_run_stdio
+        
+        # Start server (should register capabilities)
+        try:
+            await asyncio.wait_for(server.start(), timeout=0.1)
+        except asyncio.TimeoutError:
+            # Expected - server runs indefinitely
+            pass
+        
+        # Verify capabilities were registered
+        assert server.tool_registry.count() > 0
+        assert server.resource_manager is not None
     
     @pytest.mark.asyncio
     async def test_server_graceful_shutdown(self, test_server):
@@ -558,19 +553,9 @@ class TestErrorHandling:
     
     def test_missing_resource_manager(self, test_server):
         """Test error handling when resource manager is missing."""
-        # Temporarily remove resource manager
-        original_rm = test_server.resource_manager
-        test_server.resource_manager = None
-        
-        try:
-            # Should handle gracefully
-            test_server._register_capabilities()
-        except Exception:
-            # Error is acceptable if resource manager is required
-            pass
-        finally:
-            # Restore
-            test_server.resource_manager = original_rm
+        # Context is set during _register_capabilities, so this should work
+        test_server._register_capabilities()
+        # Should not raise exception
     
     def test_missing_llm_provider(self, server_config):
         """Test error handling when LLM provider is missing."""

@@ -363,7 +363,7 @@ class TestToolHandlers:
         """Test analyze_n8n_workflow handler."""
         # Mock server instance with provider
         from unittest.mock import Mock, patch
-        from src.mcp_server.tools.handlers import set_server_instance
+        from src.mcp_server.context import HandlerContext
         from src.llm_provider.base import GenerationResponse
         
         mock_server = Mock()
@@ -374,7 +374,7 @@ class TestToolHandlers:
             model="gpt-4o-mini",
         )
         mock_server._get_llm_provider.return_value = mock_provider
-        set_server_instance(mock_server)
+        HandlerContext.set(mock_server)
         
         result = await analyze_n8n_workflow(
             workflow_json='{"nodes": [], "connections": {}}',
@@ -396,10 +396,10 @@ class TestToolHandlers:
         mock_response.content = "Generated specifications"
         mock_provider.generate.return_value = mock_response
         
-        from src.mcp_server.tools.handlers import set_server_instance
+        from src.mcp_server.context import HandlerContext
         mock_server = Mock()
         mock_server._get_llm_provider.return_value = mock_provider
-        set_server_instance(mock_server)
+        HandlerContext.set(mock_server)
         
         result = await extract_custom_logic(
             code="def test(): pass",
@@ -427,13 +427,29 @@ class TestToolHandlers:
     @pytest.mark.asyncio
     async def test_validate_implementation_handler(self):
         """Test validate_implementation handler."""
+        # Set up mock server with context and LLM provider
+        from unittest.mock import Mock
+        from src.mcp_server.context import HandlerContext
+        
+        mock_server = Mock()
+        mock_provider = Mock()
+        mock_provider.is_initialized.return_value = True
+        mock_server._get_llm_provider.return_value = mock_provider
+        HandlerContext.set(mock_server)
+        
         result = await validate_implementation(
-            code="def test(): pass",
+            code="def test(): pass\n    return True",
             check_syntax=True,
+            check_compliance=True,
+            check_best_practices=False,  # Skip LLM suggestions for simpler test
         )
         assert isinstance(result, dict)
         assert "status" in result
-        assert "checks" in result
+        # Result should have validation report structure
+        # format_validation_report returns status="success" with "valid" and "syntax" keys
+        assert result["status"] == "success"
+        assert "valid" in result
+        assert "syntax" in result
 
     @pytest.mark.asyncio
     async def test_list_guides_handler(self):

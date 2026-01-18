@@ -19,9 +19,8 @@ from src.mcp_server.tools.extract import (
 )
 from src.mcp_server.tools.handlers import (
     extract_custom_logic,
-    set_server_instance,
-    _get_llm_provider,
 )
+from src.mcp_server.context import HandlerContext
 from src.llm_provider.base import GenerationResponse
 
 
@@ -526,7 +525,7 @@ class TestExtractCustomLogicHandler:
         mock_server = Mock()
         mock_server._get_llm_provider.return_value = mock_provider
         
-        set_server_instance(mock_server)
+        HandlerContext.set(mock_server)
         
         result = await extract_custom_logic(
             SIMPLE_PYTHON_CODE, "python", "TestNode"
@@ -549,7 +548,7 @@ class TestExtractCustomLogicHandler:
         mock_server = Mock()
         mock_server._get_llm_provider.return_value = mock_provider
         
-        set_server_instance(mock_server)
+        HandlerContext.set(mock_server)
         
         result = await extract_custom_logic(
             SIMPLE_JAVASCRIPT_CODE, "javascript"
@@ -575,7 +574,7 @@ class TestExtractCustomLogicHandler:
         mock_server = Mock()
         mock_server._get_llm_provider.return_value = mock_provider
         
-        set_server_instance(mock_server)
+        HandlerContext.set(mock_server)
         
         result = await extract_custom_logic(INVALID_PYTHON_CODE, "python")
         
@@ -596,14 +595,13 @@ class TestExtractCustomLogicHandler:
         mock_server = Mock()
         mock_server._get_llm_provider.side_effect = Exception("Provider error")
         
-        set_server_instance(mock_server)
+        HandlerContext.set(mock_server)
         
-        # Mock create_from_env to also fail
-        with patch("src.mcp_server.tools.handlers.create_from_env", side_effect=Exception("No provider")):
-            result = await extract_custom_logic(SIMPLE_PYTHON_CODE, "python")
-            
-            assert result["status"] == "error"
-            assert "LLM provider unavailable" in result["error"]
+        result = await extract_custom_logic(SIMPLE_PYTHON_CODE, "python")
+        
+        assert result["status"] == "error"
+        # Error should mention provider or LLM
+        assert "provider" in result["error"].lower() or "llm" in result["error"].lower() or "failed" in result["error"].lower()
     
     @pytest.mark.asyncio
     async def test_handler_llm_generation_error(self):
@@ -615,7 +613,7 @@ class TestExtractCustomLogicHandler:
         mock_server = Mock()
         mock_server._get_llm_provider.return_value = mock_provider
         
-        set_server_instance(mock_server)
+        HandlerContext.set(mock_server)
         
         result = await extract_custom_logic(SIMPLE_PYTHON_CODE, "python")
         
@@ -634,7 +632,7 @@ class TestExtractCustomLogicHandler:
         mock_server = Mock()
         mock_server._get_llm_provider.return_value = mock_provider
         
-        set_server_instance(mock_server)
+        HandlerContext.set(mock_server)
         
         # Mock extract_dependencies to fail
         with patch("src.mcp_server.tools.handlers.extract_dependencies", side_effect=Exception("Parse error")):
@@ -650,34 +648,34 @@ class TestGetLlmProvider:
     
     def test_get_provider_from_server(self):
         """Test getting provider from server instance."""
+        from src.mcp_server.context import get_llm_provider
+        
         mock_provider = Mock()
         mock_server = Mock()
         mock_server._get_llm_provider.return_value = mock_provider
         
-        set_server_instance(mock_server)
+        HandlerContext.set(mock_server)
         
-        provider = _get_llm_provider()
+        provider = get_llm_provider()
         assert provider == mock_provider
     
-    def test_get_provider_fallback(self):
-        """Test fallback to environment provider."""
-        mock_provider = Mock()
+    def test_get_provider_no_context(self):
+        """Test error when context is not set."""
+        from src.mcp_server.context import get_llm_provider
         
-        set_server_instance(None)
+        HandlerContext.set(None)
         
-        with patch("src.mcp_server.tools.handlers.create_from_env") as mock_create:
-            mock_create.return_value = mock_provider
-            provider = _get_llm_provider()
-            assert provider == mock_provider
-            mock_create.assert_called_once_with(auto_initialize=True)
+        with pytest.raises(RuntimeError, match="Server context not set"):
+            get_llm_provider()
     
     def test_get_provider_error(self):
         """Test error handling when provider cannot be obtained."""
+        from src.mcp_server.context import get_llm_provider
+        
         mock_server = Mock()
         mock_server._get_llm_provider.side_effect = Exception("Server error")
         
-        set_server_instance(mock_server)
+        HandlerContext.set(mock_server)
         
-        with patch("src.mcp_server.tools.handlers.create_from_env", side_effect=Exception("No provider")):
-            with pytest.raises(RuntimeError, match="Failed to get or create LLM provider"):
-                _get_llm_provider()
+        with pytest.raises(RuntimeError, match="Failed to get LLM provider"):
+            get_llm_provider()

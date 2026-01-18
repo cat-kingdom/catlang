@@ -6,10 +6,11 @@ in later phases (Fase 5-8).
 """
 
 import logging
-from typing import Any, Dict, Optional
+from typing import Any
 
-from ...llm_provider import create_from_env
-from ..resources.guides import GuideResourceManager
+from ..context import get_llm_provider, get_resource_manager
+from ..decorators import handle_errors
+from ..constants import ResponseStatus, ErrorCode, ErrorMessage
 from .analyze import (
     parse_n8n_workflow,
     validate_n8n_schema,
@@ -58,62 +59,12 @@ from .validate import (
 
 logger = logging.getLogger(__name__)
 
-# Context variable to store server instance for provider access
-_server_instance: Optional[Any] = None
 
-# Context variable to store resource manager (for tool handlers)
-_resource_manager_tool: Optional[GuideResourceManager] = None
-
-
-def set_server_instance(server_instance: Any) -> None:
-    """Set the server instance for provider access.
-    
-    This allows handlers to access the LLM provider from the server.
-    
-    Args:
-        server_instance: MCPServer instance
-    """
-    global _server_instance
-    _server_instance = server_instance
-    logger.debug("Server instance set for handler context")
-    
-    # Also set resource manager if available
-    if hasattr(server_instance, "resource_manager"):
-        global _resource_manager_tool
-        _resource_manager_tool = server_instance.resource_manager
-        logger.debug("Resource manager set for handler context")
-
-
-def _get_llm_provider():
-    """Get LLM provider from server instance or create new one.
-    
-    Returns:
-        LLM provider instance
-        
-    Raises:
-        RuntimeError: If provider cannot be obtained
-    """
-    # Try to get provider from server instance
-    if _server_instance is not None:
-        try:
-            provider = _server_instance._get_llm_provider()
-            if provider:
-                return provider
-        except Exception as e:
-            logger.warning(f"Failed to get provider from server: {e}")
-    
-    # Fallback: create provider from environment
-    logger.info("Creating LLM provider from environment (fallback)")
-    try:
-        return create_from_env(auto_initialize=True)
-    except Exception as e:
-        raise RuntimeError(f"Failed to get or create LLM provider: {e}") from e
-
-
+@handle_errors
 async def analyze_n8n_workflow(
     workflow_json: str,
     include_metadata: bool = True,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Analyze n8n workflow and generate production requirements.
     
     Args:
@@ -131,70 +82,40 @@ async def analyze_n8n_workflow(
     logger.info(f"analyze_n8n_workflow called (include_metadata={include_metadata})")
     logger.debug(f"Workflow JSON length: {len(workflow_json)} characters")
     
-    try:
-        # Parse and validate workflow JSON
-        workflow_data = parse_n8n_workflow(workflow_json)
-        is_valid, error_msg = validate_n8n_schema(workflow_data)
-        
-        if not is_valid:
-            return {
-                "status": "error",
-                "error": f"Invalid n8n workflow schema: {error_msg}",
-                "workflow_length": len(workflow_json),
-            }
-        
-        # Extract metadata
-        metadata = extract_workflow_metadata(workflow_data)
-        
-        # Get LLM provider
-        try:
-            provider = _get_llm_provider()
-        except RuntimeError as e:
-            logger.error(f"Failed to get LLM provider: {e}")
-            return {
-                "status": "error",
-                "error": f"LLM provider unavailable: {e}",
-                "workflow_length": len(workflow_json),
-            }
-        
-        # Generate requirements using LLM
-        try:
-            requirements_text = generate_requirements(workflow_json, provider)
-        except Exception as e:
-            logger.error(f"Failed to generate requirements: {e}")
-            return {
-                "status": "error",
-                "error": f"Failed to generate requirements: {e}",
-                "metadata": metadata if include_metadata else None,
-            }
-        
-        # Format response
-        response = format_llm_response(requirements_text, metadata, include_metadata)
-        
-        logger.info("Successfully analyzed n8n workflow")
-        return response
-        
-    except ValueError as e:
-        logger.error(f"Invalid workflow JSON: {e}")
+    # Parse and validate workflow JSON
+    workflow_data = parse_n8n_workflow(workflow_json)
+    is_valid, error_msg = validate_n8n_schema(workflow_data)
+    
+    if not is_valid:
         return {
-            "status": "error",
-            "error": f"Invalid workflow JSON: {e}",
+            "status": ResponseStatus.ERROR.value,
+            "error": f"{ErrorMessage.INVALID_WORKFLOW_SCHEMA}: {error_msg}",
+            "error_code": ErrorCode.INVALID_WORKFLOW_JSON.value,
             "workflow_length": len(workflow_json),
         }
-    except Exception as e:
-        logger.error(f"Unexpected error in analyze_n8n_workflow: {e}", exc_info=True)
-        return {
-            "status": "error",
-            "error": f"Unexpected error: {e}",
-            "workflow_length": len(workflow_json),
-        }
+    
+    # Extract metadata
+    metadata = extract_workflow_metadata(workflow_data)
+    
+    # Get LLM provider from context
+    provider = get_llm_provider()
+    
+    # Generate requirements using LLM
+    requirements_text = generate_requirements(workflow_json, provider)
+    
+    # Format response
+    response = format_llm_response(requirements_text, metadata, include_metadata)
+    
+    logger.info("Successfully analyzed n8n workflow")
+    return response
 
 
+@handle_errors
 async def extract_custom_logic(
     code: str,
     language: str,
     node_name: str | None = None,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Extract custom logic from custom node code.
     
     Args:
@@ -216,106 +137,73 @@ async def extract_custom_logic(
     )
     logger.debug(f"Code length: {len(code)} characters")
     
-    try:
-        # Validate language
-        if not validate_language(language):
-            return {
-                "status": "error",
-                "error": f"Unsupported language: {language}. Supported: python, javascript",
-                "code_length": len(code),
-            }
-        
-        # Validate code
-        is_valid, error_msg = validate_code(code, language)
-        if not is_valid:
-            return {
-                "status": "error",
-                "error": f"Invalid code: {error_msg}",
-                "language": language,
-                "code_length": len(code),
-            }
-        
-        # Extract metadata (optional, for response)
-        try:
-            dependencies = extract_dependencies(code, language)
-            functions = extract_functions(code, language)
-            classes = extract_classes(code, language)
-            
-            metadata = {
-                "node_name": node_name,
-                "function_count": len(functions),
-                "class_count": len(classes),
-                "dependencies": dependencies,
-                "code_length": len(code),
-            }
-        except Exception as e:
-            logger.warning(f"Failed to extract metadata: {e}. Continuing without metadata.")
-            metadata = {
-                "node_name": node_name,
-                "function_count": 0,
-                "class_count": 0,
-                "dependencies": [],
-                "code_length": len(code),
-            }
-        
-        # Get LLM provider
-        try:
-            provider = _get_llm_provider()
-        except RuntimeError as e:
-            logger.error(f"Failed to get LLM provider: {e}")
-            return {
-                "status": "error",
-                "error": f"LLM provider unavailable: {e}",
-                "language": language,
-                "code_length": len(code),
-            }
-        
-        # Generate specifications using LLM
-        try:
-            specifications_text = generate_specifications(
-                code, language, provider, node_name
-            )
-        except Exception as e:
-            logger.error(f"Failed to generate specifications: {e}")
-            return {
-                "status": "error",
-                "error": f"Failed to generate specifications: {e}",
-                "language": language,
-                "metadata": metadata,
-            }
-        
-        # Format response
-        response = format_extraction_response(
-            specifications_text, metadata, language, include_metadata=True
-        )
-        
-        logger.info("Successfully extracted custom logic")
-        return response
-        
-    except ValueError as e:
-        logger.error(f"Invalid input: {e}")
+    # Validate language
+    if not validate_language(language):
         return {
-            "status": "error",
-            "error": f"Invalid input: {e}",
+            "status": ResponseStatus.ERROR.value,
+            "error": f"{ErrorMessage.INVALID_LANGUAGE}: {language}",
+            "error_code": ErrorCode.INVALID_LANGUAGE.value,
+            "code_length": len(code),
+        }
+    
+    # Validate code
+    is_valid, error_msg = validate_code(code, language)
+    if not is_valid:
+        return {
+            "status": ResponseStatus.ERROR.value,
+            "error": f"{ErrorMessage.INVALID_CODE}: {error_msg}",
+            "error_code": ErrorCode.INVALID_CODE.value,
             "language": language,
+            "code_length": len(code),
+        }
+    
+    # Extract metadata (optional, for response)
+    try:
+        dependencies = extract_dependencies(code, language)
+        functions = extract_functions(code, language)
+        classes = extract_classes(code, language)
+        
+        metadata = {
+            "node_name": node_name,
+            "function_count": len(functions),
+            "class_count": len(classes),
+            "dependencies": dependencies,
             "code_length": len(code),
         }
     except Exception as e:
-        logger.error(f"Unexpected error in extract_custom_logic: {e}", exc_info=True)
-        return {
-            "status": "error",
-            "error": f"Unexpected error: {e}",
-            "language": language,
+        logger.warning(f"Failed to extract metadata: {e}. Continuing without metadata.")
+        metadata = {
+            "node_name": node_name,
+            "function_count": 0,
+            "class_count": 0,
+            "dependencies": [],
             "code_length": len(code),
         }
+    
+    # Get LLM provider from context
+    provider = get_llm_provider()
+    
+    # Generate specifications using LLM
+    specifications_text = generate_specifications(
+        code, language, provider, node_name
+    )
+    
+    # Format response
+    response = format_extraction_response(
+        specifications_text, metadata, language, include_metadata=True
+    )
+    
+    logger.info("Successfully extracted custom logic")
+    return response
 
 
+@handle_errors
 async def generate_langgraph_implementation(
     requirements: str,
     custom_logic_specs: str | None = None,
     paradigm: str = "auto",
     output_format: str = "code",
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Generate LangGraph implementation from requirements.
     
     Args:
@@ -337,178 +225,102 @@ async def generate_langgraph_implementation(
     )
     logger.debug(f"Requirements length: {len(requirements)} characters")
     
+    # Validate inputs
+    is_valid, error_msg = validate_requirements(requirements)
+    if not is_valid:
+        return {
+            "status": ResponseStatus.ERROR.value,
+            "error": f"{ErrorMessage.INVALID_REQUIREMENTS}: {error_msg}",
+            "error_code": ErrorCode.INVALID_REQUIREMENTS.value,
+            "requirements_length": len(requirements),
+            "paradigm": paradigm,
+            "output_format": output_format,
+        }
+    
+    if not validate_paradigm(paradigm):
+        return {
+            "status": ResponseStatus.ERROR.value,
+            "error": f"{ErrorMessage.INVALID_PARADIGM}: {paradigm}",
+            "error_code": ErrorCode.INVALID_PARADIGM.value,
+            "requirements_length": len(requirements),
+            "paradigm": paradigm,
+            "output_format": output_format,
+        }
+    
+    if not validate_output_format(output_format):
+        return {
+            "status": ResponseStatus.ERROR.value,
+            "error": f"{ErrorMessage.INVALID_OUTPUT_FORMAT}: {output_format}",
+            "error_code": ErrorCode.INVALID_OUTPUT_FORMAT.value,
+            "requirements_length": len(requirements),
+            "paradigm": paradigm,
+            "output_format": output_format,
+        }
+    
+    # Load Step3 prompt template
+    step3_template = load_step3_prompt_template()
+    
+    # Load all guides
     try:
-        # Validate inputs
-        is_valid, error_msg = validate_requirements(requirements)
-        if not is_valid:
-            return {
-                "status": "error",
-                "error": f"Invalid requirements: {error_msg}",
-                "requirements_length": len(requirements),
-                "paradigm": paradigm,
-                "output_format": output_format,
-            }
-        
-        if not validate_paradigm(paradigm):
-            return {
-                "status": "error",
-                "error": f"Invalid paradigm: {paradigm}. Must be 'functional', 'graph', or 'auto'",
-                "requirements_length": len(requirements),
-                "paradigm": paradigm,
-                "output_format": output_format,
-            }
-        
-        if not validate_output_format(output_format):
-            return {
-                "status": "error",
-                "error": f"Invalid output format: {output_format}. Must be 'code' or 'file'",
-                "requirements_length": len(requirements),
-                "paradigm": paradigm,
-                "output_format": output_format,
-            }
-        
-        # Load Step3 prompt template
-        try:
-            step3_template = load_step3_prompt_template()
-        except (FileNotFoundError, IOError) as e:
-            logger.error(f"Failed to load Step3 prompt template: {e}")
-            return {
-                "status": "error",
-                "error": f"Failed to load prompt template: {e}",
-                "requirements_length": len(requirements),
-            }
-        
-        # Load all guides
-        try:
-            guides = load_all_guides()
-            guides_context = build_guides_context(guides)
-        except Exception as e:
-            logger.warning(f"Failed to load guides: {e}. Continuing without guides.")
-            guides = {}
-            guides_context = ""
-        
-        # Determine paradigm
-        try:
-            selected_paradigm = determine_paradigm(requirements, paradigm)
-        except Exception as e:
-            logger.error(f"Failed to determine paradigm: {e}")
-            return {
-                "status": "error",
-                "error": f"Failed to determine paradigm: {e}",
-                "requirements_length": len(requirements),
-                "paradigm": paradigm,
-            }
-        
-        # Get paradigm-specific guide
-        try:
-            paradigm_guide = get_paradigm_guide(selected_paradigm, guides)
-        except Exception as e:
-            logger.warning(f"Failed to get paradigm guide: {e}. Continuing without paradigm guide.")
-            paradigm_guide = ""
-        
-        # Build complete generation prompt
-        try:
-            prompt = build_generation_prompt(
-                requirements=requirements,
-                custom_logic_specs=custom_logic_specs,
-                guides_context=guides_context,
-                paradigm=selected_paradigm,
-                paradigm_guide=paradigm_guide,
-            )
-        except Exception as e:
-            logger.error(f"Failed to build generation prompt: {e}")
-            return {
-                "status": "error",
-                "error": f"Failed to build generation prompt: {e}",
-                "requirements_length": len(requirements),
-            }
-        
-        # Get LLM provider
-        try:
-            provider = _get_llm_provider()
-        except RuntimeError as e:
-            logger.error(f"Failed to get LLM provider: {e}")
-            return {
-                "status": "error",
-                "error": f"LLM provider unavailable: {e}",
-                "requirements_length": len(requirements),
-            }
-        
-        # Generate code using LLM
-        try:
-            llm_output = generate_code(prompt, provider)
-        except Exception as e:
-            logger.error(f"Failed to generate code: {e}")
-            return {
-                "status": "error",
-                "error": f"Failed to generate code: {e}",
-                "requirements_length": len(requirements),
-                "paradigm": selected_paradigm,
-            }
-        
-        # Extract code from LLM response
-        try:
-            code = extract_code_from_response(llm_output)
-        except ValueError as e:
-            logger.error(f"Failed to extract code from LLM response: {e}")
-            return {
-                "status": "error",
-                "error": f"Failed to extract code from response: {e}",
-                "llm_output_snippet": llm_output[:500] if len(llm_output) > 500 else llm_output,
-                "requirements_length": len(requirements),
-            }
-        
-        # Handle output format
-        file_path = None
-        if output_format == "file":
-            try:
-                file_path = save_code_to_file(code)
-            except IOError as e:
-                logger.error(f"Failed to save code to file: {e}")
-                return {
-                    "status": "error",
-                    "error": f"Failed to save code to file: {e}",
-                    "code": code,  # Still return code even if file save fails
-                    "paradigm": selected_paradigm,
-                }
-        
-        # Format and return response
-        response = format_response(
-            code=code,
-            paradigm=selected_paradigm,
-            output_format=output_format,
-            file_path=file_path,
-        )
-        
-        logger.info("Successfully generated LangGraph implementation")
-        return response
-        
-    except ValueError as e:
-        logger.error(f"Invalid input: {e}")
-        return {
-            "status": "error",
-            "error": f"Invalid input: {e}",
-            "requirements_length": len(requirements),
-            "paradigm": paradigm,
-            "output_format": output_format,
-        }
+        guides = load_all_guides()
+        guides_context = build_guides_context(guides)
     except Exception as e:
-        logger.error(f"Unexpected error in generate_langgraph_implementation: {e}", exc_info=True)
-        return {
-            "status": "error",
-            "error": f"Unexpected error: {e}",
-            "requirements_length": len(requirements),
-            "paradigm": paradigm,
-            "output_format": output_format,
-        }
+        logger.warning(f"Failed to load guides: {e}. Continuing without guides.")
+        guides = {}
+        guides_context = ""
+    
+    # Determine paradigm
+    selected_paradigm = determine_paradigm(requirements, paradigm)
+    
+    # Get paradigm-specific guide
+    try:
+        paradigm_guide = get_paradigm_guide(selected_paradigm, guides)
+    except Exception as e:
+        logger.warning(f"Failed to get paradigm guide: {e}. Continuing without paradigm guide.")
+        paradigm_guide = ""
+    
+    # Build complete generation prompt
+    prompt = build_generation_prompt(
+        requirements=requirements,
+        custom_logic_specs=custom_logic_specs,
+        guides_context=guides_context,
+        paradigm=selected_paradigm,
+        paradigm_guide=paradigm_guide,
+    )
+    
+    # Get LLM provider from context
+    provider = get_llm_provider()
+    
+    # Generate code using LLM
+    llm_output = generate_code(prompt, provider)
+    
+    # Extract code from LLM response
+    code = extract_code_from_response(llm_output)
+    
+    # Handle output format
+    file_path = None
+    if output_format == "file":
+        file_path = save_code_to_file(code)
+    
+    # Format and return response
+    response = format_response(
+        code=code,
+        paradigm=selected_paradigm,
+        output_format=output_format,
+        file_path=file_path,
+    )
+    
+    logger.info("Successfully generated LangGraph implementation")
+    return response
 
 
+@handle_errors
 async def validate_implementation(
     code: str,
     check_syntax: bool = True,
     check_compliance: bool = True,
     check_best_practices: bool = True,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Validate LangGraph implementation code.
     
     Args:
@@ -528,67 +340,67 @@ async def validate_implementation(
     )
     logger.debug(f"Code length: {len(code)} characters")
     
-    try:
-        # Validate code input
-        is_valid, error_msg = validate_code_input(code)
-        if not is_valid:
-            return {
-                "status": "error",
-                "error": f"Invalid code input: {error_msg}",
-                "code_length": len(code),
-            }
-        
-        # Initialize results
-        syntax_result = {"valid": True, "errors": [], "warnings": []}
-        compliance_issues = []
-        quality_issues = []
-        suggestions = []
-        detected_paradigm = "unknown"
-        
-        # 1. Syntax Validation
-        if check_syntax:
-            try:
-                is_syntax_valid, syntax_error_msg, syntax_error = check_python_syntax(code)
-                syntax_result["valid"] = is_syntax_valid
-                
-                if not is_syntax_valid:
-                    syntax_result["errors"].append({
-                        "type": "error",
-                        "category": "syntax",
-                        "severity": "error",
-                        "message": syntax_error_msg or "Syntax error",
-                        "line": syntax_error.lineno if syntax_error else None,
-                        "column": syntax_error.offset if syntax_error else None,
-                        "code_snippet": syntax_error.text.strip() if syntax_error and syntax_error.text else None,
-                        "suggestion": "Fix syntax errors before proceeding",
-                        "guide_reference": None,
-                    })
-                else:
-                    # Check imports and basic types only if syntax is valid
-                    import_issues = validate_imports(code)
-                    syntax_result["warnings"].extend(import_issues)
-                    
-                    type_issues = check_basic_types(code)
-                    if type_issues:
-                        syntax_result["warnings"].extend(type_issues)
-                        
-            except Exception as e:
-                logger.error(f"Syntax validation failed: {e}")
-                syntax_result["valid"] = False
+    # Validate code input
+    is_valid, error_msg = validate_code_input(code)
+    if not is_valid:
+        return {
+            "status": ResponseStatus.ERROR.value,
+            "error": f"{ErrorMessage.INVALID_CODE}: {error_msg}",
+            "error_code": ErrorCode.INVALID_CODE.value,
+            "code_length": len(code),
+        }
+    
+    # Initialize results
+    syntax_result = {"valid": True, "errors": [], "warnings": []}
+    compliance_issues = []
+    quality_issues = []
+    suggestions = []
+    detected_paradigm = "unknown"
+    
+    # 1. Syntax Validation
+    if check_syntax:
+        try:
+            is_syntax_valid, syntax_error_msg, syntax_error = check_python_syntax(code)
+            syntax_result["valid"] = is_syntax_valid
+            
+            if not is_syntax_valid:
                 syntax_result["errors"].append({
                     "type": "error",
                     "category": "syntax",
                     "severity": "error",
-                    "message": f"Syntax validation error: {e}",
-                    "line": None,
-                    "column": None,
-                    "code_snippet": None,
-                    "suggestion": "Check code for syntax errors",
+                    "message": syntax_error_msg or "Syntax error",
+                    "line": syntax_error.lineno if syntax_error else None,
+                    "column": syntax_error.offset if syntax_error else None,
+                    "code_snippet": syntax_error.text.strip() if syntax_error and syntax_error.text else None,
+                    "suggestion": "Fix syntax errors before proceeding",
                     "guide_reference": None,
                 })
-        
-        # 2. Compliance Checking (only if syntax is valid or check_compliance is True)
-        if check_compliance:
+            else:
+                # Check imports and basic types only if syntax is valid
+                import_issues = validate_imports(code)
+                syntax_result["warnings"].extend(import_issues)
+                
+                type_issues = check_basic_types(code)
+                if type_issues:
+                    syntax_result["warnings"].extend(type_issues)
+                    
+        except Exception as e:
+            logger.error(f"Syntax validation failed: {e}")
+            syntax_result["valid"] = False
+            syntax_result["errors"].append({
+                "type": "error",
+                "category": "syntax",
+                "severity": "error",
+                "message": f"Syntax validation error: {e}",
+                "line": None,
+                "column": None,
+                "code_snippet": None,
+                "suggestion": "Check code for syntax errors",
+                "guide_reference": None,
+            })
+    
+    # 2. Compliance Checking (only if syntax is valid or check_compliance is True)
+    if check_compliance:
             try:
                 # Detect paradigm
                 detected_paradigm = detect_paradigm(code)
@@ -626,9 +438,9 @@ async def validate_implementation(
                     "suggestion": "Review compliance checking error",
                     "guide_reference": None,
                 })
-        
-        # 3. Best Practices Checking
-        if check_best_practices:
+    
+    # 3. Best Practices Checking
+    if check_best_practices:
             try:
                 # Check code quality
                 quality_issues_list = check_code_quality(code)
@@ -636,7 +448,7 @@ async def validate_implementation(
                 
                 # Generate LLM suggestions
                 try:
-                    provider = _get_llm_provider()
+                    provider = get_llm_provider()
                     validation_results = {
                         "syntax": syntax_result,
                         "compliance": {
@@ -663,40 +475,33 @@ async def validate_implementation(
                     "suggestion": "Review best practices checking error",
                     "guide_reference": None,
                 })
-        
-        # Format validation report
-        report = format_validation_report(
-            syntax_result=syntax_result,
-            compliance_issues=compliance_issues,
-            quality_issues=quality_issues,
-            suggestions=suggestions,
-            code_length=len(code),
-            paradigm=detected_paradigm,
-        )
-        
-        logger.info(
-            f"Validation complete: "
-            f"valid={report['valid']}, "
-            f"errors={report['summary']['total_errors']}, "
-            f"warnings={report['summary']['total_warnings']}, "
-            f"suggestions={report['summary']['total_suggestions']}"
-        )
-        
-        return report
-        
-    except Exception as e:
-        logger.error(f"Unexpected error in validate_implementation: {e}", exc_info=True)
-        return {
-            "status": "error",
-            "error": f"Unexpected error: {e}",
-            "code_length": len(code),
-        }
+    
+    # Format validation report
+    report = format_validation_report(
+        syntax_result=syntax_result,
+        compliance_issues=compliance_issues,
+        quality_issues=quality_issues,
+        suggestions=suggestions,
+        code_length=len(code),
+        paradigm=detected_paradigm,
+    )
+    
+    logger.info(
+        f"Validation complete: "
+        f"valid={report['valid']}, "
+        f"errors={report['summary']['total_errors']}, "
+        f"warnings={report['summary']['total_warnings']}, "
+        f"suggestions={report['summary']['total_suggestions']}"
+    )
+    
+    return report
 
 
+@handle_errors
 async def list_guides(
     category: str | None = None,
     tags: list[str] | None = None,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """List all available implementation guides.
     
     Args:
@@ -711,58 +516,36 @@ async def list_guides(
         f"(category={category}, tags={tags})"
     )
     
-    # Get resource manager from server instance or global context
-    resource_manager = _resource_manager_tool
-    if resource_manager is None and _server_instance is not None:
-        if hasattr(_server_instance, "resource_manager"):
-            resource_manager = _server_instance.resource_manager
+    # Get resource manager from context
+    resource_manager = get_resource_manager()
     
-    if resource_manager is None:
-        logger.error("Resource manager not available")
-        return {
-            "status": "error",
-            "error": "Resource manager not initialized",
-            "guides": [],
-            "count": 0,
-        }
+    # Ensure resource manager is initialized
+    if not resource_manager._initialized:
+        resource_manager.initialize()
     
-    try:
-        
-        # Ensure resource manager is initialized
-        if not resource_manager._initialized:
-            resource_manager.initialize()
-        
-        # List guides with filters
-        guides = resource_manager.indexer.list_guides(category=category, tags=tags)
-        
-        # Convert to response format
-        guides_list = [guide.to_dict() for guide in guides]
-        
-        logger.info(f"Listed {len(guides_list)} guides")
-        return {
-            "status": "success",
-            "guides": guides_list,
-            "count": len(guides_list),
-            "filters": {
-                "category": category,
-                "tags": tags,
-            },
-        }
-        
-    except Exception as e:
-        logger.error(f"Failed to list guides: {e}", exc_info=True)
-        return {
-            "status": "error",
-            "error": f"Failed to list guides: {e}",
-            "guides": [],
-            "count": 0,
-        }
+    # List guides with filters
+    guides = resource_manager.indexer.list_guides(category=category, tags=tags)
+    
+    # Convert to response format
+    guides_list = [guide.to_dict() for guide in guides]
+    
+    logger.info(f"Listed {len(guides_list)} guides")
+    return {
+        "status": ResponseStatus.SUCCESS.value,
+        "guides": guides_list,
+        "count": len(guides_list),
+        "filters": {
+            "category": category,
+            "tags": tags,
+        },
+    }
 
 
+@handle_errors
 async def query_guide(
     guide_name: str,
     category: str | None = None,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Query a specific implementation guide.
     
     Args:
@@ -780,72 +563,53 @@ async def query_guide(
     # Validate input
     if not guide_name or not guide_name.strip():
         return {
-            "status": "error",
-            "error": "Guide name cannot be empty",
+            "status": ResponseStatus.ERROR.value,
+            "error": ErrorMessage.GUIDE_NAME_EMPTY,
+            "error_code": ErrorCode.INVALID_INPUT.value,
             "guide_name": guide_name,
         }
     
-    # Get resource manager from server instance or global context
-    resource_manager = _resource_manager_tool
-    if resource_manager is None and _server_instance is not None:
-        if hasattr(_server_instance, "resource_manager"):
-            resource_manager = _server_instance.resource_manager
+    # Get resource manager from context
+    resource_manager = get_resource_manager()
     
-    if resource_manager is None:
-        logger.error("Resource manager not available")
-        return {
-            "status": "error",
-            "error": "Resource manager not initialized",
-            "guide_name": guide_name,
-        }
+    # Ensure resource manager is initialized
+    if not resource_manager._initialized:
+        resource_manager.initialize()
     
-    try:
-        
-        # Ensure resource manager is initialized
-        if not resource_manager._initialized:
-            resource_manager.initialize()
-        
-        # Get guide metadata
-        guide = resource_manager.indexer.get_guide(guide_name, category=category)
-        
-        if guide is None:
-            logger.warning(f"Guide not found: {guide_name} (category={category})")
-            return {
-                "status": "error",
-                "error": f"Guide '{guide_name}' not found",
-                "guide_name": guide_name,
-                "category": category,
-            }
-        
-        # Get guide content
-        content = resource_manager.get_guide_content(guide_name, category=category)
-        
-        if content is None:
-            logger.warning(f"Guide content not found: {guide_name}")
-            return {
-                "status": "error",
-                "error": f"Guide content not found for '{guide_name}'",
-                "guide_name": guide_name,
-            }
-        
-        logger.info(f"Retrieved guide: {guide_name}")
+    # Get guide metadata
+    guide = resource_manager.indexer.get_guide(guide_name, category=category)
+    
+    if guide is None:
+        logger.warning(f"Guide not found: {guide_name} (category={category})")
         return {
-            "status": "success",
-            "guide_name": guide_name,
-            "category": guide.category,
-            "title": guide.title,
-            "description": guide.description,
-            "tags": guide.tags,
-            "uri": guide.uri,
-            "content": content,
-            "last_modified": guide.last_modified.isoformat() if guide.last_modified else None,
-        }
-        
-    except Exception as e:
-        logger.error(f"Failed to query guide: {e}", exc_info=True)
-        return {
-            "status": "error",
-            "error": f"Failed to query guide: {e}",
+            "status": ResponseStatus.ERROR.value,
+            "error": f"{ErrorMessage.GUIDE_NOT_FOUND}: '{guide_name}'",
+            "error_code": ErrorCode.GUIDE_NOT_FOUND.value,
             "guide_name": guide_name,
             "category": category,
         }
+    
+    # Get guide content
+    content = resource_manager.get_guide_content(guide_name, category=category)
+    
+    if content is None:
+        logger.warning(f"Guide content not found: {guide_name}")
+        return {
+            "status": ResponseStatus.ERROR.value,
+            "error": f"{ErrorMessage.GUIDE_NOT_FOUND}: '{guide_name}' (content)",
+            "error_code": ErrorCode.GUIDE_NOT_FOUND.value,
+            "guide_name": guide_name,
+        }
+    
+    logger.info(f"Retrieved guide: {guide_name}")
+    return {
+        "status": ResponseStatus.SUCCESS.value,
+        "guide_name": guide_name,
+        "category": guide.category,
+        "title": guide.title,
+        "description": guide.description,
+        "tags": guide.tags,
+        "uri": guide.uri,
+        "content": content,
+        "last_modified": guide.last_modified.isoformat() if guide.last_modified else None,
+    }

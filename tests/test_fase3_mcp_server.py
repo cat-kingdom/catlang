@@ -215,29 +215,24 @@ class TestServerLifecycle:
         }
         server = MCPServer(config)
         
-        # Mock stdio_server to avoid actual stdio operations
-        with patch('src.mcp_server.server.stdio_server') as mock_stdio:
-            mock_read = AsyncMock()
-            mock_write = AsyncMock()
-            mock_context = AsyncMock()
-            mock_context.__aenter__ = AsyncMock(return_value=(mock_read, mock_write))
-            mock_context.__aexit__ = AsyncMock(return_value=None)
-            mock_stdio.return_value = mock_context
-            
-            # Mock mcp.run to avoid actual execution
-            server.mcp.run = AsyncMock()
-            
-            # Start server (should not raise)
-            try:
-                # Use asyncio.wait_for to prevent hanging
-                await asyncio.wait_for(server.start(), timeout=0.1)
-            except asyncio.TimeoutError:
-                # Expected - server runs indefinitely
-                pass
-            except Exception as e:
-                # Check if it's the expected timeout or other error
-                if "timeout" not in str(e).lower():
-                    raise
+        # Mock mcp.run_stdio_async to avoid actual stdio operations
+        server.mcp.run_stdio_async = AsyncMock()
+        # Make it run indefinitely (simulate actual behavior)
+        async def mock_run_stdio():
+            await asyncio.sleep(10)  # Simulate long-running server
+        server.mcp.run_stdio_async = mock_run_stdio
+        
+        # Start server (should not raise)
+        try:
+            # Use asyncio.wait_for to prevent hanging
+            await asyncio.wait_for(server.start(), timeout=0.1)
+        except asyncio.TimeoutError:
+            # Expected - server runs indefinitely
+            pass
+        except Exception as e:
+            # Check if it's the expected timeout or other error
+            if "timeout" not in str(e).lower():
+                raise
 
     async def test_server_start_invalid_transport(self):
         """Test server start with invalid transport type."""

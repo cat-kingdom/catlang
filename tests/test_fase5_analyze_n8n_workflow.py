@@ -19,9 +19,8 @@ from src.mcp_server.tools.analyze import (
 )
 from src.mcp_server.tools.handlers import (
     analyze_n8n_workflow,
-    set_server_instance,
-    _get_llm_provider,
 )
+from src.mcp_server.context import HandlerContext
 from src.llm_provider.base import GenerationResponse
 
 
@@ -412,7 +411,7 @@ class TestAnalyzeN8nWorkflowHandler:
             model="gpt-4o-mini",
         )
         server._get_llm_provider.return_value = mock_provider
-        set_server_instance(server)
+        HandlerContext.set(server)
         return server
     
     @pytest.mark.asyncio
@@ -455,7 +454,7 @@ class TestAnalyzeN8nWorkflowHandler:
         # Set server instance with failing provider
         server = Mock()
         server._get_llm_provider.side_effect = RuntimeError("Provider unavailable")
-        set_server_instance(server)
+        HandlerContext.set(server)
         
         result = await analyze_n8n_workflow(SAMPLE_WORKFLOW_JSON)
         
@@ -476,23 +475,15 @@ class TestAnalyzeN8nWorkflowHandler:
     
     @pytest.mark.asyncio
     async def test_handler_fallback_provider(self):
-        """Test handler fallback to environment provider."""
-        # Set server instance to None to trigger fallback
-        set_server_instance(None)
+        """Test handler when context is not set (should raise error)."""
+        # Set context to None - should raise RuntimeError
+        HandlerContext.set(None)
         
-        with patch("src.mcp_server.tools.handlers.create_from_env") as mock_create:
-            mock_provider = Mock()
-            mock_provider.is_initialized.return_value = True
-            mock_provider.generate.return_value = GenerationResponse(
-                content="Fallback requirements",
-                model="gpt-4o-mini",
-            )
-            mock_create.return_value = mock_provider
-            
-            result = await analyze_n8n_workflow(SAMPLE_WORKFLOW_JSON)
-            
-            assert result["status"] == "success"
-            mock_create.assert_called_once()
+        result = await analyze_n8n_workflow(SAMPLE_WORKFLOW_JSON)
+        
+        # Should return error because context is not set
+        assert result["status"] == "error"
+        assert "error" in result
 
 
 class TestGetLlmProvider:
@@ -503,42 +494,16 @@ class TestGetLlmProvider:
         mock_server = Mock()
         mock_provider = Mock()
         mock_server._get_llm_provider.return_value = mock_provider
-        set_server_instance(mock_server)
+        HandlerContext.set(mock_server)
         
-        provider = _get_llm_provider()
+        from src.mcp_server.context import get_llm_provider
+        provider = get_llm_provider()
         assert provider == mock_provider
     
-    def test_get_provider_fallback(self):
-        """Test fallback to environment provider."""
-        set_server_instance(None)
+    def test_get_provider_no_context(self):
+        """Test error when context is not set."""
+        HandlerContext.set(None)
         
-        with patch("src.mcp_server.tools.handlers.create_from_env") as mock_create:
-            mock_provider = Mock()
-            mock_create.return_value = mock_provider
-            
-            provider = _get_llm_provider()
-            assert provider == mock_provider
-            mock_create.assert_called_once()
-    
-    def test_get_provider_server_error(self):
-        """Test fallback when server provider fails."""
-        mock_server = Mock()
-        mock_server._get_llm_provider.side_effect = Exception("Server error")
-        set_server_instance(mock_server)
-        
-        with patch("src.mcp_server.tools.handlers.create_from_env") as mock_create:
-            mock_provider = Mock()
-            mock_create.return_value = mock_provider
-            
-            provider = _get_llm_provider()
-            assert provider == mock_provider
-    
-    def test_get_provider_all_fail(self):
-        """Test error when all provider sources fail."""
-        set_server_instance(None)
-        
-        with patch("src.mcp_server.tools.handlers.create_from_env") as mock_create:
-            mock_create.side_effect = Exception("All providers failed")
-            
-            with pytest.raises(RuntimeError):
-                _get_llm_provider()
+        from src.mcp_server.context import get_llm_provider
+        with pytest.raises(RuntimeError, match="Server context not set"):
+            get_llm_provider()

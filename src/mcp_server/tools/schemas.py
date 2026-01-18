@@ -3,10 +3,10 @@
 This module defines JSON Schema schemas for all MCP tools.
 """
 
-from typing import Dict, Any
+from typing import Any
 
 # Tool schema definitions following JSON Schema specification
-TOOL_SCHEMAS: Dict[str, Dict[str, Any]] = {
+TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
     "analyze_n8n_workflow": {
         "name": "analyze_n8n_workflow",
         "description": "Analyze an n8n workflow JSON and generate production requirements for LangGraph implementation.",
@@ -151,7 +151,7 @@ TOOL_SCHEMAS: Dict[str, Dict[str, Any]] = {
 class ToolSchema:
     """Tool schema wrapper for easier access."""
     
-    def __init__(self, name: str, schema: Dict[str, Any]):
+    def __init__(self, name: str, schema: dict[str, Any]):
         """Initialize tool schema.
         
         Args:
@@ -171,7 +171,7 @@ class ToolSchema:
         """
         return self.input_schema.get("required", [])
     
-    def get_properties(self) -> Dict[str, Any]:
+    def get_properties(self) -> dict[str, Any]:
         """Get parameter properties.
         
         Returns:
@@ -179,7 +179,7 @@ class ToolSchema:
         """
         return self.input_schema.get("properties", {})
     
-    def validate_required(self, params: Dict[str, Any]) -> tuple[bool, list[str]]:
+    def validate_required(self, params: dict[str, Any]) -> tuple[bool, list[str]]:
         """Validate that all required parameters are present.
         
         Args:
@@ -193,7 +193,7 @@ class ToolSchema:
         return len(missing) == 0, missing
 
 
-def get_tool_schema(name: str) -> Optional[ToolSchema]:
+def get_tool_schema(name: str) -> ToolSchema | None:
     """Get tool schema by name.
     
     Args:
@@ -207,7 +207,7 @@ def get_tool_schema(name: str) -> Optional[ToolSchema]:
     return ToolSchema(name, TOOL_SCHEMAS[name])
 
 
-def get_tool_schemas() -> Dict[str, ToolSchema]:
+def get_tool_schemas() -> dict[str, ToolSchema]:
     """Get all tool schemas.
     
     Returns:

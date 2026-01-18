@@ -8,14 +8,13 @@ import asyncio
 import logging
 import sys
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
 from ..llm_provider import create_from_env
 from .resources.guides import GuideResourceManager
 from .resources.handlers import (
-    set_resource_manager,
     list_all_guide_resources,
     get_guide_resource,
 )
@@ -28,8 +27,8 @@ from .tools.handlers import (
     validate_implementation,
     list_guides,
     query_guide,
-    set_server_instance,
 )
+from .context import HandlerContext
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +40,7 @@ class MCPServer:
     to LangGraph implementations.
     """
 
-    def __init__(self, config: Optional[dict[str, Any]] = None):
+    def __init__(self, config: dict[str, Any] | None = None):
         """Initialize MCP Server.
         
         Args:
@@ -164,8 +163,8 @@ class MCPServer:
         """
         logger.info("Registering server capabilities...")
         
-        # Set server instance for handler context (allows handlers to access LLM provider)
-        set_server_instance(self)
+        # Set server instance in context (allows handlers to access LLM provider and resources)
+        HandlerContext.set(self)
         
         # Map of tool names to handler functions
         tool_handlers = {
@@ -231,8 +230,7 @@ class MCPServer:
         # Initialize resource manager
         self.resource_manager.initialize()
         
-        # Set resource manager for handler access
-        set_resource_manager(self.resource_manager)
+        # Resource manager is accessible via context (set in _register_capabilities)
         
         # Register resource for listing all guides
         @self.mcp.resource("guide://list")
@@ -323,7 +321,7 @@ class MCPServer:
         }
 
 
-def create_server(config: Optional[dict[str, Any]] = None) -> MCPServer:
+def create_server(config: dict[str, Any] | None = None) -> MCPServer:
     """Factory function to create an MCP server instance.
     
     Args:
