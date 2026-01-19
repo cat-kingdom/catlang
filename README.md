@@ -64,4 +64,3 @@ catlang/
 ## License
 
 MIT License - Copyright (c) 2026 Catlang, Muhammad Fajar Agus Saputra
-MIT License - Copyright (c) 2025 MADAILAB, Rohit Aggarwal , Hitesh Balegar
